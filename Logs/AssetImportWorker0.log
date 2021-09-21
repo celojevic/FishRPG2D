@@ -829,3 +829,4 @@ Received Import Request.
 Start importing Assets/Particle System.prefab using Guid(019bbac5dc7e23349b94affd681784d8) Importer(815301076,1909f56bfc062723c751e8b465ee728b)  -> (artifact id: 'cf34ab3ee18c2bd632b476f7b7c8a056') in 0.010953 seconds 
   Import took 0.016269 seconds .
 
+AssetImportWorkerClient::OnTransportError - code=2 error=End of file
