@@ -10,9 +10,7 @@
 
 using System;
 
-using Mono.Cecil.Metadata;
-
-namespace Mono.Cecil {
+namespace MonoFN.Cecil {
 
 	public abstract class TypeSpecification : TypeReference {
 
@@ -50,7 +48,7 @@ namespace Mono.Cecil {
 		}
 
 		public override MetadataType MetadataType {
-			get { return (MetadataType) etype; }
+			get { return (MetadataType)etype; }
 		}
 
 		internal TypeSpecification (TypeReference type)

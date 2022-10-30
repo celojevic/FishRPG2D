@@ -1,43 +1,44 @@
-﻿using FishNet.Managing.Object;
-using FishNet.Connection;
+﻿using FishNet.Connection;
+using FishNet.Managing.Object;
+using FishNet.Managing.Utility;
 using FishNet.Object;
 using FishNet.Serializing;
-using UnityEngine;
-using System;
+using FishNet.Transporting;
+using System.Runtime.CompilerServices;
 
-namespace FishNet.Managing.Server.Object
+namespace FishNet.Managing.Server
 {
     public partial class ServerObjects : ManagedObjects
     {
 
         /// <summary>
+        /// Parses a ReplicateRpc.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void ParseReplicateRpc(PooledReader reader, NetworkConnection conn, Channel channel)
+        {
+            NetworkBehaviour nb = reader.ReadNetworkBehaviour();
+            int dataLength = Packets.GetPacketLength((ushort)PacketId.ServerRpc, reader, channel);
+
+            if (nb != null)
+                nb.OnReplicateRpc(null, reader, conn, channel);
+            else
+                SkipDataLength((ushort)PacketId.ServerRpc, reader, dataLength);
+        }
+
+        /// <summary>
         /// Parses a ServerRpc.
         /// </summary>
-        /// <param name="data"></param>
-        internal void ParseServerRpc(PooledReader reader, int senderClientId, int dataLength)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void ParseServerRpc(PooledReader reader, NetworkConnection conn, Channel channel)
         {
-            NetworkConnection conn;
-            if (!NetworkManager.ServerManager.Clients.TryGetValue(senderClientId, out conn))
-                Debug.LogWarning($"NetworkConnection not found for connection {senderClientId}.");
-
-            int startPosition = reader.Position;
             NetworkBehaviour nb = reader.ReadNetworkBehaviour();
+            int dataLength = Packets.GetPacketLength((ushort)PacketId.ServerRpc, reader, channel);
+
             if (nb != null)
-            {
-                nb.OnServerRpc(reader, conn);
-            }
+                nb.OnServerRpc(reader, conn, channel);
             else
-            {
-                if (dataLength == -1)
-                {
-                    Debug.LogWarning($"NetworkBehaviour could not be found for ObserversRpc.");
-                }
-                else
-                {
-                    reader.Position = startPosition;
-                    reader.Skip(Math.Min(dataLength, reader.Remaining));
-                }
-            }
+                SkipDataLength((ushort)PacketId.ServerRpc, reader, dataLength);
         }
     }
 

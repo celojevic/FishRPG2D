@@ -1,15 +1,14 @@
-﻿using System;
+﻿using FishNet.CodeGenerating.ILCore;
+using MonoFN.Cecil;
+using System;
 using System.Linq.Expressions;
 using System.Reflection;
-using FishNet.CodeGenerating.ILCore;
-using Mono.Cecil;
 
 namespace FishNet.CodeGenerating.Helping.Extension
 {
 
     public static class ModuleDefinitionExtensions
     {
-
         /// <summary>
         /// Gets a class within CodegenSession.Module.
         /// </summary>
@@ -22,7 +21,7 @@ namespace FishNet.CodeGenerating.Helping.Extension
 
         public static TypeReference ImportReference<T>(this ModuleDefinition moduleDef)
         {
-            return CodegenSession.Module.ImportReference(typeof(T));
+            return CodegenSession.ImportReference(typeof(T));
         }
 
         public static MethodReference ImportReference(this ModuleDefinition moduleDef, Expression<Action> expression)

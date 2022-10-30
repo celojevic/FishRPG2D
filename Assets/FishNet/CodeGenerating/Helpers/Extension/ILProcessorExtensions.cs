@@ -1,13 +1,74 @@
-﻿using Mono.Cecil;
-using Mono.Cecil.Cil;
+﻿using MonoFN.Cecil;
+using MonoFN.Cecil.Cil;
 using System.Collections.Generic;
-using UnityEngine;
 
 namespace FishNet.CodeGenerating.Helping.Extension
 {
 
     public static class ILProcessorExtensions
     {
+
+        /// <summary>
+        /// Creates a debug log for text without any conditions.
+        /// </summary>
+        public static void DebugLog(this ILProcessor processor, string txt)
+        {
+            processor.Emit(OpCodes.Ldstr, txt);
+            processor.Emit(OpCodes.Call, CodegenSession.GeneralHelper.Debug_LogCommon_MethodRef);
+        }
+        /// <summary>
+        /// Creates a debug log for vd without any conditions.
+        /// </summary>
+        public static void DebugLog(this ILProcessor processor, VariableDefinition vd)
+        {
+            processor.Emit(OpCodes.Ldloc, vd);
+            processor.Emit(OpCodes.Box, vd.VariableType);
+            processor.Emit(OpCodes.Call, CodegenSession.GeneralHelper.Debug_LogCommon_MethodRef);
+        }
+        /// <summary>
+        /// Creates a debug log for vd without any conditions.
+        /// </summary>
+        public static void DebugLog(this ILProcessor processor, FieldDefinition fd, bool loadArg0)
+        {
+            if (loadArg0)
+                processor.Emit(OpCodes.Ldarg_0);
+            processor.Emit(OpCodes.Ldfld, fd);
+            processor.Emit(OpCodes.Box, fd.FieldType);
+            processor.Emit(OpCodes.Call, CodegenSession.GeneralHelper.Debug_LogCommon_MethodRef);
+        }
+        /// <summary>
+        /// Creates a debug log for pd without any conditions.
+        /// </summary>
+        public static void DebugLog(this ILProcessor processor, ParameterDefinition pd)
+        {
+            processor.Emit(OpCodes.Ldloc, pd);
+            processor.Emit(OpCodes.Box, pd.ParameterType);
+            processor.Emit(OpCodes.Call, CodegenSession.GeneralHelper.Debug_LogCommon_MethodRef);
+        }
+
+        ///// <summary>
+        ///// Creates a debug log for mr without any conditions.
+        ///// </summary>
+        //public static void DebugLog(this ILProcessor processor, MethodReference mr)
+        //{
+        //    processor.Emit(OpCodes.Call, mr);
+        //    processor.Emit(OpCodes.Box, mr.ReturnType);
+        //    processor.Emit(OpCodes.Call, CodegenSession.GeneralHelper.Debug_LogCommon_MethodRef);
+        //}
+
+
+        /// <summary>
+        /// Inserts instructions at the beginning.
+        /// </summary>
+        /// <param name="processor"></param>
+        /// <param name="instructions"></param>
+        public static void InsertAt(this ILProcessor processor, int target, List<Instruction> instructions)
+        {
+            for (int i = 0; i < instructions.Count; i++)
+                processor.Body.Instructions.Insert(i + target, instructions[i]);
+        }
+
+
         /// <summary>
         /// Inserts instructions at the beginning.
         /// </summary>
@@ -27,13 +88,13 @@ namespace FishNet.CodeGenerating.Helping.Extension
         public static void InsertLast(this ILProcessor processor, List<Instruction> instructions)
         {
             bool retRemoved = false;
-            int startingCount = processor.Body.instructions.Count;
+            int startingCount = processor.Body.Instructions.Count;
             //Remove ret if it exist and add it back in later.
             if (startingCount > 0)
             {
-                if (processor.Body.instructions[startingCount - 1].OpCode == OpCodes.Ret)
+                if (processor.Body.Instructions[startingCount - 1].OpCode == OpCodes.Ret)
                 {
-                    processor.Body.instructions.RemoveAt(startingCount - 1);
+                    processor.Body.Instructions.RemoveAt(startingCount - 1);
                     retRemoved = true;
                 }
             }
@@ -51,9 +112,9 @@ namespace FishNet.CodeGenerating.Helping.Extension
         /// </summary>
         /// <param name="processor"></param>
         /// <param name="instructions"></param>
-        public static void InsertBefore(this ILProcessor processor,Instruction target, List<Instruction> instructions)
+        public static void InsertBefore(this ILProcessor processor, Instruction target, List<Instruction> instructions)
         {
-            int index = processor.Body.instructions.IndexOf(target);
+            int index = processor.Body.Instructions.IndexOf(target);
             for (int i = 0; i < instructions.Count; i++)
                 processor.Body.Instructions.Insert(index + i, instructions[i]);
         }
@@ -76,7 +137,7 @@ namespace FishNet.CodeGenerating.Helping.Extension
         /// <param name="instructions"></param>
         public static void InsertBeforeReturns(this ILProcessor processor, List<Instruction> instructions)
         {
-            if (processor.Body.Method.ReturnType != CodegenSession.Module.TypeSystem.Void)
+            if (processor.Body.Method.ReturnType.FullName != CodegenSession.Module.TypeSystem.Void.FullName)
             {
                 CodegenSession.LogError($"Cannot insert instructions before returns on {processor.Body.Method.FullName} because it does not return void.");
                 return;
@@ -100,6 +161,8 @@ namespace FishNet.CodeGenerating.Helping.Extension
                 }
             }
         }
+
+
     }
 
 

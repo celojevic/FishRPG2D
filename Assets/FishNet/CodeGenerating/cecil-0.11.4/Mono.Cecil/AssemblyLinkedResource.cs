@@ -8,9 +8,7 @@
 // Licensed under the MIT/X11 license.
 //
 
-using System;
-
-namespace Mono.Cecil {
+namespace MonoFN.Cecil {
 
 	public sealed class AssemblyLinkedResource : Resource {
 

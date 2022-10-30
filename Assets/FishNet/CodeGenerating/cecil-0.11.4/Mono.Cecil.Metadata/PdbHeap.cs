@@ -8,11 +8,9 @@
 // Licensed under the MIT/X11 license.
 //
 
-using Mono.Cecil.PE;
-
 using RID = System.UInt32;
 
-namespace Mono.Cecil.Metadata {
+namespace MonoFN.Cecil.Metadata {
 
 	sealed class PdbHeap : Heap {
 
@@ -28,7 +26,7 @@ namespace Mono.Cecil.Metadata {
 
 		public bool HasTable (Table table)
 		{
-			return (TypeSystemTables & (1L << (int) table)) != 0;
+			return (TypeSystemTables & (1L << (int)table)) != 0;
 		}
 	}
 }

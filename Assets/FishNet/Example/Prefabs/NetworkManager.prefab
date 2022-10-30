@@ -10,6 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 7443408887813606049}
   - component: {fileID: 7443408887813606050}
+  - component: {fileID: 934570884}
   - component: {fileID: 7443408887813606060}
   m_Layer: 0
   m_Name: NetworkManager
@@ -45,10 +46,26 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d2c95dfde7d73b54dbbdc23155d35d36, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _logging: {fileID: 0}
+  _spawnablePrefabs: {fileID: 11400000, guid: ec64eb18c93ab344892891f33edbf82a, type: 2}
+  _refreshDefaultPrefabs: 0
   _runInBackground: 1
   _dontDestroyOnLoad: 1
-  _allowMultiple: 0
-  _spawnablePrefabs: {fileID: 11400000, guid: 87841bc59b2ee1140b51c008f714da48, type: 2}
+  _persistence: 0
+--- !u!114 &934570884
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7443408887813606051}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7d331f979d46e8e4a9fc90070c596d44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _defaultConditions:
+  - {fileID: 11400000, guid: 2033f54fd2794464bae08fa5a55c8996, type: 2}
 --- !u!114 &7443408887813606060
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -61,9 +78,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 211a9f6ec51ddc14f908f5acc0cd0423, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _playerPrefab: {fileID: 611616139817875448, guid: bf5f023b4017a5e41a9815ec5745df3d,
-    type: 3}
-  _spawns: []
+  _playerPrefab: {fileID: 0}
+  _addToDefaultScene: 1
+  Spawns: []
 --- !u!1001 &2130063410
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -174,11 +191,6 @@ PrefabInstance:
     - target: {fileID: 4393252310969058990, guid: 0570b6f7f713dc44a90463654bbcd8d0,
         type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 4393252310969058994, guid: 0570b6f7f713dc44a90463654bbcd8d0,
-        type: 3}
-      propertyPath: AutoStart
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4393252310969058995, guid: 0570b6f7f713dc44a90463654bbcd8d0,

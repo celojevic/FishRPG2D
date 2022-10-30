@@ -1,15 +1,17 @@
 using FishNet.Connection;
-using FishNet.Managing;
+using FishNet.Documenting;
 using FishNet.Object;
 using FishNet.Serializing.Helping;
 using FishNet.Transporting;
 using System;
-using System.IO;
-using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace FishNet.Serializing
 {
+    /// <summary>
+    /// Extensions to Read methods. Used by Read<T>.
+    /// </summary>
+    [APIExclude]
     public static class ReaderExtensions
     {
 
@@ -42,7 +44,7 @@ namespace FishNet.Serializing
         public static Vector3Int ReadVector3Int(this Reader reader, AutoPackType packType = AutoPackType.Packed) => reader.ReadVector3Int(packType);
         public static Color ReadColor(this Reader reader, AutoPackType packType = AutoPackType.Packed) => reader.ReadColor(packType);
         public static Color32 ReadColor32(this Reader reader) => reader.ReadColor32();
-        public static Quaternion ReadQuaternion(this Reader reader) => reader.ReadQuaternion();
+        public static Quaternion ReadQuaternion(this Reader reader, AutoPackType packType = AutoPackType.Packed) => reader.ReadQuaternion(packType);
         public static Rect ReadRect(this Reader reader) => reader.ReadRect();
         public static Plane ReadPlane(this Reader reader) => reader.ReadPlane();
         public static Ray ReadRay(this Reader reader) => reader.ReadRay();
@@ -52,6 +54,7 @@ namespace FishNet.Serializing
         public static byte[] ReadBytesAllocated(this Reader reader, int count) => reader.ReadBytesAllocated(count);
         public static System.Guid ReadGuid(this Reader reader) => reader.ReadGuid();
         public static GameObject ReadGameObject(this Reader reader) => reader.ReadGameObject();
+        public static Transform ReadTransform(this Reader reader) => reader.ReadTransform();
         public static NetworkObject ReadNetworkObject(this Reader reader) => reader.ReadNetworkObject();
         public static NetworkBehaviour ReadNetworkBehaviour(this Reader reader) => reader.ReadNetworkBehaviour();
         public static Channel ReadChannel(this Reader reader) => reader.ReadChannel();

@@ -11,47 +11,37 @@ using UnityEditor;
 
 namespace FishNet.Object
 {
-    public partial class NetworkObject : MonoBehaviour
+    public sealed partial class NetworkObject : MonoBehaviour
     {
         #region Serialized.
 
         /// <summary>
         /// 
         /// </summary>
-        [SerializeField, HideInInspector]
-        private short _prefabId = -1;
-        /// <summary>
-        /// Id to use when spawning this object over the network as a prefab.
-        /// </summary>
-        public short PrefabId => _prefabId;
-        /// <summary>
-        /// Sets PrefabId.
-        /// </summary>
-        /// <param name="value"></param>
-        internal void SetPrefabId(short value)
-        {
-            _prefabId = value;
-        }
+        [field: SerializeField, HideInInspector]
+        public short PrefabId { get; internal set; } = -1;
 #pragma warning disable 414 //Disabled because Unity thinks tihs is unused when building.
         /// <summary>
         /// Hash to the scene which this object resides.
         /// </summary>
         [SerializeField, HideInInspector]
-        private uint _scenePathHash = 0;
+        private uint _scenePathHash;
 #pragma warning restore 414
         /// <summary>
-        /// 
+        /// Network Id for this scene object.
         /// </summary>
-        [SerializeField, HideInInspector]
-        private ulong _sceneId = 0;
+        [field: SerializeField, HideInInspector]
+        internal ulong SceneId { get; private set; }
         /// <summary>
-        /// Id for this scene object.
+        /// Hash for the path which this asset resides. This value is set during edit time.
+        /// </summary> 
+        [field: SerializeField, HideInInspector]
+        public ulong AssetPathHash { get; private set; }
+        /// <summary>
+        /// Sets AssetPathhash value.
         /// </summary>
-        public ulong SceneId
-        {
-            get => _sceneId;
-            private set => _sceneId = value;
-        }
+        /// <param name="value">Value to use.</param>
+        public void SetAssetPathHash(ulong value) => AssetPathHash = value;
         #endregion
 
 #if UNITY_EDITOR
@@ -63,16 +53,38 @@ namespace FishNet.Object
         private List<NetworkObject> _sceneNetworkObjects = new List<NetworkObject>();
 #endif
 
+        /// <summary>
+        /// Removes SceneObject state.
+        /// This may only be called at runtime.
+        /// </summary>
+        internal void ClearRuntimeSceneObject()
+        {
+            if (!Application.isPlaying)
+            {
+                Debug.LogError($"ClearRuntimeSceneObject may only be called at runtime.");
+                return;
+            }
+
+            SceneId = 0;
+        }
+
 #if UNITY_EDITOR
         /// <summary>
         /// Tries to generate a SceneId.
         /// </summary>
-        private void TryCreateSceneID()
+        internal void TryCreateSceneID()
         {
             if (Application.isPlaying)
                 return;
+            //Unity bug, sometimes this can be null depending on editor callback orders.
             if (gameObject == null)
                 return;
+            //Not a scene object.
+            if (string.IsNullOrEmpty(gameObject.scene.name))
+            {
+                SceneId = 0;
+                return;
+            }
 
             ulong startId = SceneId;
             uint startPath = _scenePathHash;
@@ -103,7 +115,7 @@ namespace FishNet.Object
                      * being opened then cancel build and request user to open and save
                      * scene. */
                     if (BuildPipeline.isBuildingPlayer)
-                        throw new InvalidOperationException($"Scene {gameObject.scene.path} needs to be opened and resaved before building, because the scene object {gameObject.name} has no valid sceneId yet.");
+                        throw new InvalidOperationException($"Networked GameObject {gameObject.name} in scene {gameObject.scene.path} is missing a SceneId. Open the scene, select the Fish-Networking menu, and choose Rebuild SceneIds. If the problem persist ensures {gameObject.name} does not have any missing script references on it's prefab or in the scene. Also ensure that you have any prefab changes for the object applied.");
 
                     ulong shiftedHash = (ulong)scenePathHash << 32;
                     ulong randomId = 0;
@@ -134,7 +146,7 @@ namespace FishNet.Object
                  * scene is existed. Essentially, it gets repopulated
                  * when the scene is re-opened. */
                 SceneId = sceneId;
-                _scenePathHash = scenePathHash; 
+                _scenePathHash = scenePathHash;
             }
         }
 
@@ -160,6 +172,7 @@ namespace FishNet.Object
                 }
             }
             return false;
+
         }
 
         /// <summary>
@@ -176,16 +189,15 @@ namespace FishNet.Object
                 if (nob != null && nob != this && nob.SceneId == id)
                     return true;
             }
-
             //If here all checks pass.
             return false;
         }
 
-        protected virtual void OnValidate()
+        private void ReferenceIds_OnValidate()
         {
             TryCreateSceneID();
         }
-        partial void PartialReset()
+        private void ReferenceIds_Reset()
         {
             TryCreateSceneID();
         }

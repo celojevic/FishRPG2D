@@ -1,8 +1,12 @@
 ﻿using FishNet.CodeGenerating.Processing;
-using Mono.Cecil;
+using FishNet.CodeGenerating.Processing.Rpc;
+using MonoFN.Cecil;
 using System.Collections.Generic;
 using Unity.CompilationPipeline.Common.Diagnostics;
+#if !UNITY_2020_1_OR_NEWER
 using UnityEngine;
+#endif
+using SR = System.Reflection;
 
 namespace FishNet.CodeGenerating.Helping
 {
@@ -15,9 +19,9 @@ namespace FishNet.CodeGenerating.Helping
         internal static List<DiagnosticMessage> Diagnostics;
 
         [System.ThreadStatic]
-        internal static AttributeHelper AttributeHelper;
+        internal static TimeManagerHelper TimeManagerHelper;
         [System.ThreadStatic]
-        internal static ConnectionHelper ConnectionHelper;
+        internal static AttributeHelper AttributeHelper;
         [System.ThreadStatic]
         internal static GeneralHelper GeneralHelper;
         [System.ThreadStatic]
@@ -27,13 +31,13 @@ namespace FishNet.CodeGenerating.Helping
         [System.ThreadStatic]
         internal static ObjectHelper ObjectHelper;
         [System.ThreadStatic]
+        internal static NetworkBehaviourHelper NetworkBehaviourHelper;
+        [System.ThreadStatic]
         internal static ReaderGenerator ReaderGenerator;
         [System.ThreadStatic]
         internal static ReaderHelper ReaderHelper;
         [System.ThreadStatic]
-        internal static SyncHandlerGenerator SyncHandlerGenerator;
-        [System.ThreadStatic]
-        internal static SyncVarGenerator SyncVarGenerator;
+        internal static CreatedSyncVarGenerator CreatedSyncVarGenerator;
         [System.ThreadStatic]
         internal static TransportHelper TransportHelper;
         [System.ThreadStatic]
@@ -43,36 +47,36 @@ namespace FishNet.CodeGenerating.Helping
         [System.ThreadStatic]
         internal static CustomSerializerProcessor CustomSerializerProcessor;
         [System.ThreadStatic]
-        internal static NetworkBehaviourCallbackProcessor NetworkBehaviourCallbackProcessor;
-        [System.ThreadStatic]
         internal static NetworkBehaviourProcessor NetworkBehaviourProcessor;
         [System.ThreadStatic]
         internal static QolAttributeProcessor QolAttributeProcessor;
         [System.ThreadStatic]
-        internal static NetworkBehaviourRpcProcessor NetworkBehaviourRpcProcessor;
+        internal static RpcProcessor RpcProcessor;
         [System.ThreadStatic]
         internal static NetworkBehaviourSyncProcessor NetworkBehaviourSyncProcessor;
-
+        [System.ThreadStatic]
+        internal static NetworkBehaviourPredictionProcessor NetworkBehaviourPredictionProcessor;
+        [System.ThreadStatic]
+        internal static NetworkConnectionHelper NetworkConnectionHelper;
+        [System.ThreadStatic]
+        internal static PredictedObjectHelper PredictedObjectHelper;
         /// <summary>
-        /// True to ignore future warnings.
+        /// SyncVars that are being accessed from an assembly other than the currently being processed one.
         /// </summary>
-        private static bool _ignoreNextWarning = false;
+        [System.ThreadStatic]
+        internal static List<FieldDefinition> DifferentAssemblySyncVars;
 
         /// <summary>
         /// Logs a warning.
         /// </summary>
         /// <param name="msg"></param>
-        internal static void LogWarning(string msg, bool ignoreNextWarning = false)
+        internal static void LogWarning(string msg)
         {
-            if (!_ignoreNextWarning || !ignoreNextWarning) 
-            {
 #if UNITY_2020_1_OR_NEWER
             Diagnostics.AddWarning(msg);
 #else
-                Debug.LogWarning(msg);
+            Debug.LogWarning(msg);
 #endif
-            }
-            _ignoreNextWarning = ignoreNextWarning;
         }
         /// <summary>
         /// Logs an error.
@@ -81,7 +85,7 @@ namespace FishNet.CodeGenerating.Helping
         internal static void LogError(string msg)
         {
 #if UNITY_2020_1_OR_NEWER
-            Diagnostics.AddWarning(msg);
+            Diagnostics.AddError(msg);
 #else
             Debug.LogError(msg);
 #endif
@@ -96,32 +100,39 @@ namespace FishNet.CodeGenerating.Helping
             Module = module;
             Diagnostics = new List<DiagnosticMessage>();
 
+            TimeManagerHelper = new TimeManagerHelper();
             AttributeHelper = new AttributeHelper();
-            ConnectionHelper = new ConnectionHelper();
             GeneralHelper = new GeneralHelper();
             GenericReaderHelper = new GenericReaderHelper();
             GenericWriterHelper = new GenericWriterHelper();
             ObjectHelper = new ObjectHelper();
+            NetworkBehaviourHelper = new NetworkBehaviourHelper();
             ReaderGenerator = new ReaderGenerator();
             ReaderHelper = new ReaderHelper();
-            SyncHandlerGenerator = new SyncHandlerGenerator();
-            SyncVarGenerator = new SyncVarGenerator();
+            CreatedSyncVarGenerator = new CreatedSyncVarGenerator();
             TransportHelper = new TransportHelper();
             WriterGenerator = new WriterGenerator();
             WriterHelper = new WriterHelper();
+            NetworkConnectionHelper = new NetworkConnectionHelper();
+            PredictedObjectHelper = new PredictedObjectHelper();
 
             CustomSerializerProcessor = new CustomSerializerProcessor();
-            NetworkBehaviourCallbackProcessor = new NetworkBehaviourCallbackProcessor();
             NetworkBehaviourProcessor = new NetworkBehaviourProcessor();
             QolAttributeProcessor = new QolAttributeProcessor();
-            NetworkBehaviourRpcProcessor = new NetworkBehaviourRpcProcessor();
+            RpcProcessor = new RpcProcessor();
             NetworkBehaviourSyncProcessor = new NetworkBehaviourSyncProcessor();
+            NetworkBehaviourPredictionProcessor = new NetworkBehaviourPredictionProcessor();
+            DifferentAssemblySyncVars = new List<FieldDefinition>();
 
-            if (!CodegenSession.GeneralHelper.ImportReferences())
+            if (!TimeManagerHelper.ImportReferences())
                 return false;
-            if (!CodegenSession.AttributeHelper.ImportReferences())
+            if (!NetworkBehaviourPredictionProcessor.ImportReferences())
                 return false;
-            if (!ConnectionHelper.ImportReferences())
+            if (!NetworkBehaviourSyncProcessor.ImportReferences())
+                return false;
+            if (!GeneralHelper.ImportReferences())
+                return false;
+            if (!AttributeHelper.ImportReferences())
                 return false;
             if (!GenericReaderHelper.ImportReferences())
                 return false;
@@ -129,13 +140,13 @@ namespace FishNet.CodeGenerating.Helping
                 return false;
             if (!ObjectHelper.ImportReferences())
                 return false;
+            if (!NetworkBehaviourHelper.ImportReferences())
+                return false;
             if (!ReaderGenerator.ImportReferences())
                 return false;
             if (!ReaderHelper.ImportReferences())
                 return false;
-            if (!SyncHandlerGenerator.ImportReferences())
-                return false;
-            if (!SyncVarGenerator.ImportReferences())
+            if (!CreatedSyncVarGenerator.ImportReferences())
                 return false;
             if (!TransportHelper.ImportReferences())
                 return false;
@@ -143,10 +154,79 @@ namespace FishNet.CodeGenerating.Helping
                 return false;
             if (!WriterHelper.ImportReferences())
                 return false;
+            if (!NetworkConnectionHelper.ImportReferences())
+                return false;
+            if (!PredictedObjectHelper.ImportReferences())
+                return false;
 
             return true;
         }
 
+
+
+#region ImportReference.
+
+        public static MethodReference ImportReference(SR.MethodBase method)
+        {
+            return Module.ImportReference(method);
+        }
+
+        public static MethodReference ImportReference(SR.MethodBase method, IGenericParameterProvider context)
+        {
+            return Module.ImportReference(method, context);
+        }
+
+        public static TypeReference ImportReference(TypeReference type)
+        {
+            return Module.ImportReference(type);
+        }
+
+        public static TypeReference ImportReference(TypeReference type, IGenericParameterProvider context)
+        {
+            return Module.ImportReference(type, context);
+        }
+
+        public static FieldReference ImportReference(FieldReference field)
+        {
+            return Module.ImportReference(field);
+        }
+
+        public static FieldReference ImportReference(FieldReference field, IGenericParameterProvider context)
+        {
+            return Module.ImportReference(field, context);
+        }
+        public static MethodReference ImportReference(MethodReference method)
+        {
+            return Module.ImportReference(method);
+        }
+
+        public static MethodReference ImportReference(MethodReference method, IGenericParameterProvider context)
+        {
+            return Module.ImportReference(method, context);
+        }
+        public static TypeReference ImportReference(System.Type type)
+        {
+            return ImportReference(type, null);
+        }
+
+
+        public static TypeReference ImportReference(System.Type type, IGenericParameterProvider context)
+        {
+            return Module.ImportReference(type, context);
+        }
+
+
+        public static FieldReference ImportReference(SR.FieldInfo field)
+        {
+            return Module.ImportReference(field);
+        }
+
+        public static FieldReference ImportReference(SR.FieldInfo field, IGenericParameterProvider context)
+        {
+            return Module.ImportReference(field, context);
+        }
+
+#endregion
     }
 
 

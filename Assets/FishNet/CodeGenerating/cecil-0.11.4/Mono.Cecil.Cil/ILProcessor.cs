@@ -8,11 +8,10 @@
 // Licensed under the MIT/X11 license.
 //
 
+using MonoFN.Collections.Generic;
 using System;
 
-using Mono.Collections.Generic;
-
-namespace Mono.Cecil.Cil {
+namespace MonoFN.Cecil.Cil {
 
 	public sealed class ILProcessor {
 
@@ -288,11 +287,5 @@ namespace Mono.Cecil.Cil {
 		{
 			instructions.Clear ();
 		}
-
-		internal void Append (object sayTrue)
-		{
-			throw new NotImplementedException ();
-		}
 	}
 }
-

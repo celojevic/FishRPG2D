@@ -1,7 +1,7 @@
-﻿using Mono.Cecil.Cil;
+﻿using MonoFN.Cecil.Cil;
 using System;
 
-namespace Mono.Cecil {
+namespace MonoFN.Cecil {
 	internal sealed class TypeResolver {
 		private readonly IGenericInstance _typeDefinitionContext;
 		private readonly IGenericInstance _methodDefinitionContext;
@@ -193,8 +193,8 @@ namespace Mono.Cecil {
 				throw new NotSupportedException ();
 
 			return genericParameter.Type == GenericParameterType.Type
-				? _typeDefinitionContext.GenericArguments[genericParameter.Position]
-				: (_methodDefinitionContext != null ? _methodDefinitionContext.GenericArguments[genericParameter.Position] : genericParameter);
+				? _typeDefinitionContext.GenericArguments [genericParameter.Position]
+				: (_methodDefinitionContext != null ? _methodDefinitionContext.GenericArguments [genericParameter.Position] : genericParameter);
 		}
 
 		private TypeReference HandleOwnerlessInvalidILCode (GenericParameter genericParameter)
@@ -203,7 +203,7 @@ namespace Mono.Cecil {
 			// is actually a type parameter, and we'll use the type parameter from the corresponding position. I think
 			// this assumption is valid, but if you're visiting this code then I might have been proven wrong.
 			if (genericParameter.Type == GenericParameterType.Method && (_typeDefinitionContext != null && genericParameter.Position < _typeDefinitionContext.GenericArguments.Count))
-				return _typeDefinitionContext.GenericArguments[genericParameter.Position];
+				return _typeDefinitionContext.GenericArguments [genericParameter.Position];
 
 			// NOTE: Owner cannot be null, but sometimes the Mono compiler generates invalid IL and we
 			// end up in this situation.

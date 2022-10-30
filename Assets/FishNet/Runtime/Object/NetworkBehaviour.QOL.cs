@@ -1,5 +1,18 @@
-﻿using FishNet.Managing;
+﻿#if UNITY_2020_3_OR_NEWER && UNITY_EDITOR_WIN
+using FishNet.CodeAnalysis.Annotations;
+#endif
+using FishNet.Component.ColliderRollback;
 using FishNet.Connection;
+using FishNet.Managing;
+using FishNet.Managing.Client;
+using FishNet.Managing.Logging;
+using FishNet.Managing.Observing;
+using FishNet.Managing.Scened;
+using FishNet.Managing.Server;
+using FishNet.Managing.Timing;
+using FishNet.Managing.Transporting;
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace FishNet.Object
@@ -10,77 +23,144 @@ namespace FishNet.Object
         /// <summary>
         /// True if the NetworkObject for this NetworkBehaviour is deinitializing.
         /// </summary>
-        public bool Deinitializing => (NetworkObject == null) ? true : NetworkObject.Deinitializing;
+        public bool IsDeinitializing => _networkObjectCache.IsDeinitializing;
+        [Obsolete("Use IsDeinitializing instead.")]
+        public bool Deinitializing => IsDeinitializing; //Remove on 2023/01/01.
         /// <summary>
         /// NetworkManager for this object.
         /// </summary>
-        public NetworkManager NetworkManager => (NetworkObject == null) ? null : NetworkObject.NetworkManager;
+        public NetworkManager NetworkManager => _networkObjectCache.NetworkManager;
         /// <summary>
-        /// True if acting as a client.
+        /// ServerManager for this object.
         /// </summary>
-        public bool IsClient => (NetworkObject == null) ? false : NetworkObject.IsClient;
+        public ServerManager ServerManager => _networkObjectCache.ServerManager;
         /// <summary>
-        /// True if client only.
+        /// ClientManager for this object.
         /// </summary>
-        public bool IsClientOnly => (NetworkObject == null) ? false : (!NetworkObject.IsServer && NetworkObject.IsClient);
+        public ClientManager ClientManager => _networkObjectCache.ClientManager;
         /// <summary>
-        /// True if acting as the server.
+        /// ObserverManager for this object.
         /// </summary>
-        public bool IsServer => (NetworkObject == null) ? false : NetworkObject.IsServer;
+        public ObserverManager ObserverManager => _networkObjectCache.ObserverManager;
         /// <summary>
-        /// True if server only.
+        /// TransportManager for this object.
         /// </summary>
-        public bool IsServerOnly => (NetworkObject == null) ? false : (NetworkObject.IsServer && !NetworkObject.IsClient);
+        public TransportManager TransportManager => _networkObjectCache.TransportManager;
         /// <summary>
-        /// True if acting as a client and the server.
+        /// TimeManager for this object.
         /// </summary>
-        public bool IsHost => (NetworkObject == null) ? false : (NetworkObject.IsServer && NetworkObject.IsClient);
+        public TimeManager TimeManager => _networkObjectCache.TimeManager;
         /// <summary>
-        /// True if the owner of this object. Only contains value on clients.
+        /// SceneManager for this object.
         /// </summary>
-        public bool IsOwner => (NetworkObject == null) ? false : NetworkObject.IsOwner;
+        public SceneManager SceneManager => _networkObjectCache.SceneManager;
         /// <summary>
-        /// Owner of this object. Will be null if there is no owner. Owner is only visible to all players.
+        /// RollbackManager for this object.
         /// </summary>
-        public NetworkConnection Owner => (NetworkObject == null) ? null : NetworkObject.Owner;
+        public RollbackManager RollbackManager => _networkObjectCache.RollbackManager;
         /// <summary>
-        /// True if the owner is a valid connection.
+        /// True if the client is active and authenticated.
         /// </summary>
-        public bool OwnerIsValid => (NetworkObject == null) ? false : NetworkObject.OwnerIsValid;
+        public bool IsClient => _networkObjectCache.IsClient;
         /// <summary>
-        /// ClientId for this NetworkObject owner. Only visible to server.
+        /// True if only the client is active and authenticated.
         /// </summary>
-        public int OwnerId => (NetworkObject == null) ? -1 : NetworkObject.OwnerId;
+        public bool IsClientOnly => _networkObjectCache.IsClientOnly;
         /// <summary>
-        /// Returns the local connection for the client calling this method.
+        /// True if server is active.
         /// </summary>
-        public NetworkConnection LocalConnection => (NetworkObject == null) ? new NetworkConnection() : NetworkObject.LocalConnection;
+        public bool IsServer => _networkObjectCache.IsServer;
+        /// <summary>
+        /// True if only the server is active.
+        /// </summary>
+        public bool IsServerOnly => _networkObjectCache.IsServerOnly;
+        /// <summary>
+        /// True if client and server are active.
+        /// </summary>
+        public bool IsHost => _networkObjectCache.IsHost;
+        /// <summary>
+        /// True if client nor server are active.
+        /// </summary>
+        public bool IsOffline => _networkObjectCache.IsOffline;
+        /// <summary>
+        /// Observers for this NetworkBehaviour.
+        /// </summary>
+        public HashSet<NetworkConnection> Observers => _networkObjectCache.Observers;
+        /// <summary>
+        /// True if the local client is the owner of this object.
+        /// </summary>
+#if UNITY_2020_3_OR_NEWER && UNITY_EDITOR_WIN
+        [PreventUsageInside("global::FishNet.Object.NetworkBehaviour", "OnStartServer", "")]
+        [PreventUsageInside("global::FishNet.Object.NetworkBehaviour", "OnStartNetwork", " Use base.Owner.IsLocalClient instead.")]
+        [PreventUsageInside("global::FishNet.Object.NetworkBehaviour", "Awake", "")]
+        [PreventUsageInside("global::FishNet.Object.NetworkBehaviour", "Start", "")]
+#endif
+        public bool IsOwner => _networkObjectCache.IsOwner;
+        /// <summary>
+        /// Owner of this object.
+        /// </summary>
+        public NetworkConnection Owner
+        {
+            get
+            {
+                //Ensures a null Owner is never returned.
+                if (_networkObjectCache == null)
+                    return FishNet.Managing.NetworkManager.EmptyConnection;
+
+                return _networkObjectCache.Owner;
+            }
+        }
+        /// <summary>
+        /// ClientId for this NetworkObject owner.
+        /// </summary>
+        public int OwnerId => _networkObjectCache.OwnerId;
+        /// <summary>
+        /// Unique Id for this _networkObjectCache. This does not represent the object owner.
+        /// </summary>
+        public int ObjectId => _networkObjectCache.ObjectId;
+        /// <summary>
+        /// The local connection of the client calling this method.
+        /// </summary>
+        public NetworkConnection LocalConnection => _networkObjectCache.LocalConnection;
         /// <summary>
         /// Returns if a connection is the owner of this object.
-        /// Internal use.
         /// </summary>
         /// <param name="connection"></param>
         /// <returns></returns>
-        public bool CompareOwner(NetworkConnection connection)
+        public bool OwnerMatches(NetworkConnection connection)
         {
-            return (NetworkObject.Owner == connection);
+            return (_networkObjectCache.Owner == connection);
         }
         /// <summary>
-        /// Despawns this NetworkObject. If server despawn will also occur on clients.
+        /// Despawns this _networkObjectCache. Can only be called on the server.
         /// </summary>
-        public void Despawn()
+        /// <param name="cacheOnDespawnOverride">Overrides the default DisableOnDespawn value for this single despawn. Scene objects will never be destroyed.</param>
+        public void Despawn(DespawnType? despawnType = null)
         {
             if (!IsNetworkObjectNull(true))
-                NetworkObject.Despawn();                
+                _networkObjectCache.Despawn(despawnType);
         }
         /// <summary>
-        /// Spawns an object over the network.
+        /// Spawns an object over the network. Can only be called on the server.
         /// </summary>
+        /// <param name="go">GameObject instance to spawn.</param>
+        /// <param name="ownerConnection">Connection to give ownership to.</param>
         public void Spawn(GameObject go, NetworkConnection ownerConnection = null)
         {
             if (IsNetworkObjectNull(true))
                 return;
-            NetworkObject.Spawn(go, ownerConnection);
+            _networkObjectCache.Spawn(go, ownerConnection);
+        }
+        /// <summary>
+        /// Spawns an object over the network. Can only be called on the server.
+        /// </summary>
+        /// <param name="nob">GameObject instance to spawn.</param>
+        /// <param name="ownerConnection">Connection to give ownership to.</param>
+        public void Spawn(NetworkObject nob, NetworkConnection ownerConnection = null)
+        {
+            if (IsNetworkObjectNull(true))
+                return;
+            _networkObjectCache.Spawn(nob, ownerConnection);
         }
         /// <summary>
         /// Returns if NetworkObject is null.
@@ -89,11 +169,29 @@ namespace FishNet.Object
         /// <returns></returns>
         private bool IsNetworkObjectNull(bool warn)
         {
-            bool isNull = (NetworkObject == null);
+            bool isNull = (_networkObjectCache == null);
             if (isNull && warn)
-                Debug.LogWarning($"NetworkObject is null. This can occur if this object is not spawned, or initialized yet.");
+            {
+                if (NetworkManager.CanLog(LoggingType.Warning))
+                    Debug.LogWarning($"NetworkObject is null. This can occur if this object is not spawned, or initialized yet.");
+            }
 
             return isNull;
+        }
+        /// <summary>
+        /// Removes ownership from all clients.
+        /// </summary>
+        public void RemoveOwnership()
+        {
+            _networkObjectCache.GiveOwnership(null, true);
+        }
+        /// <summary>
+        /// Gives ownership to newOwner.
+        /// </summary>
+        /// <param name="newOwner"></param>
+        public void GiveOwnership(NetworkConnection newOwner)
+        {
+            _networkObjectCache.GiveOwnership(newOwner, true);
         }
     }
 

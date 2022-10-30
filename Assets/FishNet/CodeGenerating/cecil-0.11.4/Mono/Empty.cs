@@ -8,10 +8,10 @@
 // Licensed under the MIT/X11 license.
 //
 
+using MonoFN.Collections.Generic;
 using System;
-using Mono.Collections.Generic;
 
-namespace Mono {
+namespace MonoFN {
 
 	static class Empty<T> {
 
@@ -27,7 +27,7 @@ namespace Mono {
 	}
 }
 
-namespace Mono.Cecil {
+namespace MonoFN.Cecil {
 
 	static partial class Mixin {
 

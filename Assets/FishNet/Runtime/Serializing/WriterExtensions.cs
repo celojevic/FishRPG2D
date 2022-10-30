@@ -1,10 +1,10 @@
 using FishNet.Connection;
+using FishNet.Documenting;
 using FishNet.Object;
 using FishNet.Serializing.Helping;
 using FishNet.Transporting;
 using System;
-using System.Runtime.CompilerServices;
-using System.Text;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace FishNet.Serializing
@@ -13,9 +13,56 @@ namespace FishNet.Serializing
     /// <summary>
     /// Extensions to Write methods. Used by Write<T>.
     /// </summary>
+    [APIExclude]
     public static class WriterExtensions
     {
 
+        /// <summary>
+        /// Types which are are set to auto pack by default.
+        /// </summary>
+        internal static HashSet<System.Type> DefaultPackedTypes = new HashSet<System.Type>();
+
+        static WriterExtensions()
+        {
+            DefaultPackedTypes.Add(typeof(int));
+            DefaultPackedTypes.Add(typeof(uint));
+            DefaultPackedTypes.Add(typeof(long));
+            DefaultPackedTypes.Add(typeof(ulong));
+            DefaultPackedTypes.Add(typeof(Color));
+            DefaultPackedTypes.Add(typeof(Vector2Int));
+            DefaultPackedTypes.Add(typeof(Vector3Int));
+            DefaultPackedTypes.Add(typeof(Quaternion));
+        }
+
+        /// <summary>
+        /// Writes value to dst without error checking.
+        /// </summary>
+        [CodegenExclude]
+        internal static void WriteUInt32(byte[] dst, uint value, ref int position)
+        {
+            dst[position++] = (byte)value;
+            dst[position++] = (byte)(value >> 8);
+            dst[position++] = (byte)(value >> 16);
+            dst[position++] = (byte)(value >> 24);
+        }
+        /// <summary>
+        /// Writes value to dst without error checking.
+        /// </summary>
+        [CodegenExclude]
+        internal static void WriteUInt64(byte[] dst, ulong value, ref int position)
+        {
+            dst[position++] = (byte)value;
+            dst[position++] = (byte)(value >> 8);
+            dst[position++] = (byte)(value >> 16);
+            dst[position++] = (byte)(value >> 24);
+            dst[position++] = (byte)(value >> 32);
+            dst[position++] = (byte)(value >> 40);
+            dst[position++] = (byte)(value >> 48);
+            dst[position++] = (byte)(value >> 56);
+        }
+
+
+        public static void WriteDictionary<TKey, TValue>(this Writer writer, Dictionary<TKey, TValue> dict) => writer.WriteDictionary(dict);
         public static void WriteByte(this Writer writer, byte value) => writer.WriteByte(value);
         [CodegenExclude]
         public static void WriteBytes(this Writer writer, byte[] buffer, int offset, int count) => writer.WriteBytes(buffer, offset, count);
@@ -42,11 +89,11 @@ namespace FishNet.Serializing
         public static void WriteVector2(this Writer writer, Vector2 value) => writer.WriteVector2(value);
         public static void WriteVector3(this Writer writer, Vector3 value) => writer.WriteVector3(value);
         public static void WriteVector4(this Writer writer, Vector4 value) => writer.WriteVector4(value);
-        public static void WriteVector2Int(this Writer writer, Vector2Int value) => writer.WriteVector2Int(value);
-        public static void WriteVector3Int(this Writer writer, Vector3Int value) => writer.WriteVector3Int(value);
+        public static void WriteVector2Int(this Writer writer, Vector2Int value, AutoPackType packType = AutoPackType.Packed) => writer.WriteVector2Int(value, packType);
+        public static void WriteVector3Int(this Writer writer, Vector3Int value, AutoPackType packType = AutoPackType.Packed) => writer.WriteVector3Int(value, packType);
         public static void WriteColor(this Writer writer, Color value, AutoPackType packType) => writer.WriteColor(value, packType);
         public static void WriteColor32(this Writer writer, Color32 value) => writer.WriteColor32(value);
-        public static void WriteQuaternion(this Writer writer, Quaternion value) => writer.WriteQuaternion(value);
+        public static void WriteQuaternion(this Writer writer, Quaternion value, AutoPackType packType = AutoPackType.Packed) => writer.WriteQuaternion(value, packType);
         public static void WriteRect(this Writer writer, Rect value) => writer.WriteRect(value);
         public static void WritePlane(this Writer writer, Plane value) => writer.WritePlane(value);
         public static void WriteRay(this Writer writer, Ray value) => writer.WriteRay(value);
@@ -54,6 +101,7 @@ namespace FishNet.Serializing
         public static void WriteMatrix4x4(this Writer writer, Matrix4x4 value) => writer.WriteMatrix4x4(value);
         public static void WriteGuidAllocated(this Writer writer, System.Guid value) => writer.WriteGuidAllocated(value);
         public static void WriteGameObject(this Writer writer, GameObject value) => writer.WriteGameObject(value);
+        public static void WriteTransform(this Writer writer, Transform value) => writer.WriteTransform(value);
         public static void WriteNetworkObject(this Writer writer, NetworkObject value) => writer.WriteNetworkObject(value);
         public static void WriteNetworkBehaviour(this Writer writer, NetworkBehaviour value) => writer.WriteNetworkBehaviour(value);
         public static void WriteChannel(this Writer writer, Channel value) => writer.WriteChannel(value);

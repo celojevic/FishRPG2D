@@ -10,7 +10,7 @@
 
 using System.Collections.Generic;
 
-namespace Mono.Cecil.Metadata {
+namespace MonoFN.Cecil.Metadata {
 
 	struct Row<T1, T2> {
 		internal T1 Col1;
@@ -134,7 +134,7 @@ namespace Mono.Cecil.Metadata {
 
 		public int GetHashCode (Row<uint, uint> obj)
 		{
-			return (int) (obj.Col1 ^ obj.Col2);
+			return (int)(obj.Col1 ^ obj.Col2);
 		}
 
 		public bool Equals (Row<uint, uint, uint> x, Row<uint, uint, uint> y)
@@ -146,7 +146,7 @@ namespace Mono.Cecil.Metadata {
 
 		public int GetHashCode (Row<uint, uint, uint> obj)
 		{
-			return (int) (obj.Col1 ^ obj.Col2 ^ obj.Col3);
+			return (int)(obj.Col1 ^ obj.Col2 ^ obj.Col3);
 		}
 	}
 }

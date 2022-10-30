@@ -1,19 +1,21 @@
-﻿using Mono.Cecil;
+﻿using MonoFN.Cecil;
 
 namespace FishNet.CodeGenerating.Processing
 {
 
     public class ProcessedSync
     {
-        public FieldReference OriginalFieldReference;
-        public MethodReference SetMethodReference;
-        public MethodReference GetMethodReference;
+        public FieldReference OriginalFieldRef;
+        public FieldReference GeneratedFieldRef;
+        public MethodReference SetMethodRef;
+        public MethodReference GetMethodRef;
 
-        public ProcessedSync(FieldReference originalFieldReference, MethodReference setMethodReference, MethodReference getMethodReference)
+        public ProcessedSync(FieldReference originalFieldRef,FieldReference generatedFieldRef,  MethodReference setMethodRef, MethodReference getMethodRef)
         {
-            OriginalFieldReference = originalFieldReference;
-            SetMethodReference = setMethodReference;
-            GetMethodReference = getMethodReference;
+            OriginalFieldRef = originalFieldRef;
+            GeneratedFieldRef = generatedFieldRef;
+            SetMethodRef = setMethodRef;
+            GetMethodRef = getMethodRef;
         }
 
     }

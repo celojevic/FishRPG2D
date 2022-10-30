@@ -1,11 +1,21 @@
 namespace FishNet.Object.Synchronizing
 {
     /// <summary>
-    /// Permission type.
+    /// Which clients may receive synchronization updates.
     /// </summary>
     public enum ReadPermission
     {
+        /// <summary>
+        /// All observers will receive updates.
+        /// </summary>
         Observers,
-        OwnerOnly
+        /// <summary>
+        /// Only owner will receive updates.
+        /// </summary>
+        OwnerOnly,
+        /// <summary>
+        /// Send to all observers except owner.
+        /// </summary>
+        ExcludeOwner
     }
 }

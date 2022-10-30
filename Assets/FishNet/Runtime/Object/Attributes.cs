@@ -1,40 +1,82 @@
-﻿using FishNet.Transporting;
+﻿using FishNet.Managing.Logging;
+using FishNet.Transporting;
 using System;
 using UnityEngine;
 
 namespace FishNet.Object
 {
-    public class RpcAttribute : Attribute { }
 
     /// <summary>
     /// ServerRpc methods will send messages to the server.
     /// </summary>
     [AttributeUsage(AttributeTargets.Method, Inherited = true, AllowMultiple = false)]
-    public class ServerRpcAttribute : RpcAttribute
+    public class ServerRpcAttribute : Attribute
     {
         /// <summary>
-        /// Whether or not the ServerRpc should only be run if executed by the owner of the object
+        /// True to only allow the owning client to call this RPC.
         /// </summary>
         public bool RequireOwnership = true;
+        /// <summary>
+        /// True to also run the RPC logic locally.
+        /// </summary>
+        public bool RunLocally = false;
+        /// <summary>
+        /// Estimated length of data being sent.
+        /// When a value other than -1 the minimum length of the used serializer will be this value.
+        /// This is useful for writing large packets which otherwise resize the serializer.
+        /// </summary>
+        public int DataLength = -1;
     }
 
     /// <summary>
     /// ObserversRpc methods will send messages to all observers.
     /// </summary>
     [AttributeUsage(AttributeTargets.Method, Inherited = true, AllowMultiple = false)]
-    public class ObserversRpcAttribute : RpcAttribute
+    public class ObserversRpcAttribute : Attribute
     {
         /// <summary>
         /// True to also send data to the owner of object.
         /// </summary>
         public bool IncludeOwner = true;
+        /// <summary>
+        /// True to buffer the last value and send it to new players when the object is spawned for them.
+        /// RPC will be sent on the same channel as the original RPC, and immediately before the OnSpawnServer override.
+        /// </summary>
+        public bool BufferLast = false;
+        /// <summary>
+        /// True to also run the RPC logic locally.
+        /// </summary>
+        public bool RunLocally = false;
+        /// <summary>
+        /// Estimated length of data being sent.
+        /// When a value other than -1 the minimum length of the used serializer will be this value.
+        /// This is useful for writing large packets which otherwise resize the serializer.
+        /// </summary>
+        public int DataLength = -1;
     }
 
     /// <summary>
     /// TargetRpc methods will send messages to a single client.
     /// </summary>
     [AttributeUsage(AttributeTargets.Method, Inherited = true, AllowMultiple = false)]
-    public class TargetRpcAttribute : RpcAttribute { }
+    public class TargetRpcAttribute : Attribute 
+    {
+        /// <summary>
+        /// True to also run the RPC logic locally.
+        /// </summary>
+        public bool RunLocally = false;
+        /// <summary>
+        /// True to validate the target is possible and output debug when not.
+        /// Use this field with caution as it may create undesired results when set to false.
+        /// </summary>
+        public bool ValidateTarget = true;
+        /// <summary>
+        /// Estimated length of data being sent.
+        /// When a value other than -1 the minimum length of the used serializer will be this value.
+        /// This is useful for writing large packets which otherwise resize the serializer.
+        /// </summary>
+        public int DataLength = -1;
+    }
 
     /// <summary>
     /// Prevents a method from running if server is not active.
@@ -44,44 +86,35 @@ namespace FishNet.Object
     public class ServerAttribute : Attribute
     {
         /// <summary>
-        /// Type of using to use when IsServer check fails.
+        /// Type of logging to use when the IsServer check fails.
         /// </summary>
-        public LoggingType Logging = LoggingType.Off;
+        public LoggingType Logging = LoggingType.Warning;
     }
 
     /// <summary>
     /// Prevents this method from running if client is not active.
-    /// <para>Can only be used inside a NetworkBehaviour</para>
     /// </summary>
     [AttributeUsage(AttributeTargets.Method, Inherited = true, AllowMultiple = false)]
     public class ClientAttribute : Attribute
     {
         /// <summary>
-        /// Type of using to use when IsClient check fails.
+        /// Type of logging to use when the IsClient check fails.
         /// </summary>
-        public LoggingType Logging = LoggingType.Off;
+        public LoggingType Logging = LoggingType.Warning;
         /// <summary>
-        /// Whether or not the ServerRpc should only be run if executed by the owner of the object
+        /// True to only allow a client to run the method if they are owner of the object.
         /// </summary>
         public bool RequireOwnership = false;
     }
-
-    public enum LoggingType
-    {
-        Off,
-        Warn,
-        Error
-    }
-
 }
 
 
 namespace FishNet.Object.Synchronizing
-{ 
+{
 
     /// <summary>
-    /// SyncObjects are used to synchronize collections from the server to all clients automatically.
-    /// <para>Value must be changed on server, not directly by clients.
+    /// Synchronizes collections or objects from the server to clients. Can be used with custom SyncObjects.
+    /// Value must be changed on server.
     /// </summary>
     [AttributeUsage(AttributeTargets.Field, Inherited = true, AllowMultiple = false)]
     public class SyncObjectAttribute : PropertyAttribute
@@ -97,8 +130,8 @@ namespace FishNet.Object.Synchronizing
     }
 
     /// <summary>
-    /// SyncVars are used to synchronize a variable from the server to all clients automatically.
-    /// <para>Value must be changed on server, not directly by clients. Hook parameter allows you to define a client-side method to be invoked when the client gets an update from the server.</para>
+    /// Synchronizes a variable from server to clients automatically.
+    /// Value must be changed on server.
     /// </summary>
     [AttributeUsage(AttributeTargets.Field, Inherited = true, AllowMultiple = false)]
     public class SyncVarAttribute : PropertyAttribute
@@ -116,7 +149,7 @@ namespace FishNet.Object.Synchronizing
         /// </summary>
         public Channel Channel;
         ///<summary>
-        ///A function that should be called on the client when the value changes.
+        /// Method which will be called on the server and clients when the value changes.
         ///</summary>
         public string OnChange;
     }

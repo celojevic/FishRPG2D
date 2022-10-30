@@ -8,12 +8,12 @@
 // Licensed under the MIT/X11 license.
 //
 
+using MonoFN.Collections.Generic;
 using System;
 using System.Diagnostics;
 using System.Threading;
-using Mono.Collections.Generic;
 
-namespace Mono.Cecil {
+namespace MonoFN.Cecil {
 
 	public struct CustomAttributeArgument {
 
@@ -203,7 +203,8 @@ namespace Mono.Cecil {
 					try {
 						reader.ReadCustomAttributeSignature (attribute);
 						resolved = true;
-					} catch (ResolutionException) {
+					}
+					catch (ResolutionException) {
 						if (arguments != null)
 							arguments.Clear ();
 						if (fields != null)

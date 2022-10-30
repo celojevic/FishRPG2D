@@ -1,5 +1,4 @@
-﻿using FishNet.Object;
-
+﻿
 namespace FishNet.Object.Helping
 {
 
@@ -15,7 +14,7 @@ namespace FishNet.Object.Helping
             if (nb == null)
                 return true;
 
-            return nb.Deinitializing;
+            return nb.IsDeinitializing;
         }
 
         /// <summary>

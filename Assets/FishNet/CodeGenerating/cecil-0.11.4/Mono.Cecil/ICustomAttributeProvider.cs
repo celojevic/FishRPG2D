@@ -8,11 +8,10 @@
 // Licensed under the MIT/X11 license.
 //
 
-using System;
+using MonoFN.Collections.Generic;
 using System.Threading;
-using Mono.Collections.Generic;
 
-namespace Mono.Cecil {
+namespace MonoFN.Cecil {
 
 	public interface ICustomAttributeProvider : IMetadataTokenProvider {
 

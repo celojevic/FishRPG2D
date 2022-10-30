@@ -1,11 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using Mono.Cecil;
-using FishNet.Serializing;
-using Mono.Cecil.Cil;
-using FishNet.CodeGenerating.Helping.Extension;
-using Unity.CompilationPipeline.Common.Diagnostics;
+﻿using FishNet.CodeGenerating.Helping.Extension;
 using FishNet.Object;
+using FishNet.Serializing;
+using MonoFN.Cecil;
+using MonoFN.Cecil.Cil;
+using System;
 using UnityEngine;
 
 namespace FishNet.CodeGenerating.Helping
@@ -13,12 +11,8 @@ namespace FishNet.CodeGenerating.Helping
     internal class ReaderGenerator
     {
 
-        #region Relfection references.
-        private Dictionary<TypeReference, ListMethodReferences> _cachedListMethodRefs = new Dictionary<TypeReference, ListMethodReferences>();
-        #endregion
-
         #region Const.
-        internal const string GENERATED_CLASS_NAME = WriterGenerator.GENERATED_CLASS_NAME;
+        internal const string GENERATED_READERS_CLASS_NAME = "GeneratedReaders___FN";
         public const TypeAttributes GENERATED_TYPE_ATTRIBUTES = WriterGenerator.GENERATED_TYPE_ATTRIBUTES;
         private const string READ_PREFIX = "Read___";
         #endregion
@@ -36,72 +30,81 @@ namespace FishNet.CodeGenerating.Helping
         /// <summary>
         /// Generates a reader for objectTypeReference if one does not already exist. 
         /// </summary>
-        /// <param name="objectTypeRef"></param>
+        /// <param name="objectTr"></param>
         /// <returns></returns>
-        internal MethodReference CreateReader(TypeReference objectTypeRef)
+        internal MethodReference CreateReader(TypeReference objectTr)
         {
-            MethodReference methodRefResult = null;
+            MethodReference resultMr = null;
             TypeDefinition objectTypeDef;
 
-            SerializerType serializerType = GeneratorHelper.GetSerializerType(objectTypeRef, false, out objectTypeDef);
+            SerializerType serializerType = GeneratorHelper.GetSerializerType(objectTr, false, out objectTypeDef);
             if (serializerType != SerializerType.Invalid)
             {
                 //Array.
                 if (serializerType == SerializerType.Array)
-                {
-                    TypeReference elementType = objectTypeRef.GetElementType();
-                    methodRefResult = CreateCollectionReaderMethodDefinition(objectTypeRef, elementType);
-                }
+                    resultMr = CreateArrayReaderMethodReference(objectTr);
                 //Enum.
                 else if (serializerType == SerializerType.Enum)
-                {
-                    methodRefResult = CreateEnumReaderMethodDefinition(objectTypeRef);
-                }
-                //List.
+                    resultMr = CreateEnumReaderMethodDefinition(objectTr);
+                else if (serializerType == SerializerType.Dictionary)
+                    resultMr = CreateDictionaryReaderMethodReference(objectTr);
+                //List.                
                 else if (serializerType == SerializerType.List)
-                {
-                    GenericInstanceType genericInstance = (GenericInstanceType)objectTypeRef;
-                    TypeReference elementType = genericInstance.GenericArguments[0];
-                    methodRefResult = CreateCollectionReaderMethodDefinition(objectTypeRef, elementType);
-                }
+                    resultMr = CreateListReaderMethodReference(objectTr);
                 //NetworkBehaviour.
                 else if (serializerType == SerializerType.NetworkBehaviour)
-                {
-                    methodRefResult = GetNetworkBehaviourReaderMethodReference(objectTypeRef);
-                }
+                    resultMr = GetNetworkBehaviourReaderMethodReference(objectTr);
+                //Nullable.
+                else if (serializerType == SerializerType.Nullable)
+                    resultMr = CreateNullableReaderMethodReference(objectTr);
                 //Class or struct.
                 else if (serializerType == SerializerType.ClassOrStruct)
-                {
-                    methodRefResult = CreateClassOrStructReaderMethodDefinition(objectTypeRef);
-                }
+                    resultMr = CreateClassOrStructReaderMethodReference(objectTr);
             }
 
-            //If was created.
-            if (methodRefResult != null)
-            {
-                CodegenSession.ReaderHelper.AddReaderMethod(objectTypeRef, methodRefResult, false, true);
-            }
+            //If was not created.
+            if (resultMr == null)
+                RemoveFromStaticReaders(objectTr);
 
-            return methodRefResult;
+            return resultMr;
+        }
+
+
+        /// <summary>
+        /// Removes from static writers.
+        /// </summary>
+        private void RemoveFromStaticReaders(TypeReference tr)
+        {
+            CodegenSession.ReaderHelper.RemoveReaderMethod(tr, false);
+        }
+        /// <summary>
+        /// Adds to static writers.
+        /// </summary>
+        private void AddToStaticReaders(TypeReference tr, MethodReference mr)
+        {
+            CodegenSession.ReaderHelper.AddReaderMethod(tr, mr.CachedResolve(), false, true);
         }
 
         /// <summary>
         /// Generates a reader for objectTypeReference if one does not already exist.
         /// </summary>
-        /// <param name="objectTypeRef"></param>
+        /// <param name="objectTr"></param>
         /// <returns></returns>
-        private MethodDefinition CreateEnumReaderMethodDefinition(TypeReference objectTypeRef)
+        private MethodReference CreateEnumReaderMethodDefinition(TypeReference objectTr)
         {
-            MethodDefinition createdReaderMethodDef = CreateStaticReaderStubMethodDefinition(objectTypeRef);
-            ILProcessor processor = createdReaderMethodDef.Body.GetILProcessor();            
+            MethodDefinition createdReaderMd = CreateStaticReaderStubMethodDefinition(objectTr);
+            AddToStaticReaders(objectTr, createdReaderMd);
+
+            ILProcessor processor = createdReaderMd.Body.GetILProcessor();
+
             //Get type reference for enum type. eg byte int
-            TypeReference underlyingTypeRef = objectTypeRef.Resolve().GetEnumUnderlyingTypeReference();
+            TypeReference underlyingTypeRef = objectTr.CachedResolve().GetEnumUnderlyingTypeReference();
             //Get read method for underlying type.
             MethodReference readMethodRef = CodegenSession.ReaderHelper.GetOrCreateFavoredReadMethodReference(underlyingTypeRef, true);
             if (readMethodRef == null)
                 return null;
 
-            ParameterDefinition readerParameterDef = createdReaderMethodDef.Parameters[0];
+            ParameterDefinition readerParameterDef = createdReaderMd.Parameters[0];
             //reader.ReadXXX().
             processor.Emit(OpCodes.Ldarg, readerParameterDef);
             if (CodegenSession.WriterHelper.IsAutoPackedType(underlyingTypeRef))
@@ -110,128 +113,61 @@ namespace FishNet.CodeGenerating.Helping
             processor.Emit(OpCodes.Call, readMethodRef);
 
             processor.Emit(OpCodes.Ret);
-            return createdReaderMethodDef;
+            return CodegenSession.ImportReference(createdReaderMd);
         }
 
 
         /// <summary>
         /// Creates a read for a class type which inherits NetworkBehaviour.
         /// </summary>
-        /// <param name="classTypeRef"></param>
+        /// <param name="objectTr"></param>
         /// <returns></returns>
-        private MethodReference GetNetworkBehaviourReaderMethodReference(TypeReference classTypeRef)
+        private MethodReference GetNetworkBehaviourReaderMethodReference(TypeReference objectTr)
         {
-            MethodDefinition createdReaderMethodDef = CreateStaticReaderStubMethodDefinition(classTypeRef);
-            ILProcessor processor = createdReaderMethodDef.Body.GetILProcessor();
+            MethodDefinition createdReaderMd = CreateStaticReaderStubMethodDefinition(objectTr);
+            AddToStaticReaders(objectTr, createdReaderMd);
+
+            ILProcessor processor = createdReaderMd.Body.GetILProcessor();
             TypeReference networkBehaviourTypeRef = CodegenSession.GeneralHelper.GetTypeReference(typeof(NetworkBehaviour));
 
             processor.Emit(OpCodes.Ldarg_0);
-            //  processor.Emit<Reader>(OpCodes.Call, (reader) => reader.ReadNetworkBehaviour());
             processor.Emit(OpCodes.Call, CodegenSession.ReaderHelper.GetFavoredReadMethodReference(networkBehaviourTypeRef, true));
-            processor.Emit(OpCodes.Castclass, classTypeRef);
+            processor.Emit(OpCodes.Castclass, objectTr);
             processor.Emit(OpCodes.Ret);
-            return createdReaderMethodDef;
+            return CodegenSession.ImportReference(createdReaderMd);
         }
-
-        /// <summary>
-        /// Returns common list references for list type of elementTypeRef.
-        /// </summary>
-        /// <param name="elementTypeRef"></param>
-        /// <returns></returns>
-        private ListMethodReferences GetListMethodReferences(TypeReference elementTypeRef)
-        {
-            ListMethodReferences result;
-            //If found return result.
-            if (_cachedListMethodRefs.TryGetValue(elementTypeRef, out result))
-            {
-                return result;
-            }
-            //Otherwise make a new entry.
-            else
-            {
-                Type elementMonoType = elementTypeRef.GetMonoType();
-                if (elementMonoType == null)
-                {
-                    CodegenSession.LogError($"Mono Type could not be found for {elementMonoType.FullName}.");
-                    return null;
-                }
-                Type constructedListType = typeof(List<>).MakeGenericType(elementMonoType);
-
-                MethodReference add = null;
-                MethodReference item = null;
-                foreach (System.Reflection.MethodInfo methodInfo in constructedListType.GetMethods())
-                {
-                    if (methodInfo.Name == "Add")
-                        add = CodegenSession.Module.ImportReference(methodInfo);
-                    else if (methodInfo.Name == "get_Item")
-                        item = CodegenSession.Module.ImportReference(methodInfo);
-                }
-
-
-                if (add == null || item == null)
-                {
-                    CodegenSession.LogError($"Count or Item property could not be found for {elementMonoType.FullName}.");
-                    return null;
-                }
-
-                ListMethodReferences lmr = new ListMethodReferences(constructedListType, item, add);
-                _cachedListMethodRefs.Add(elementTypeRef, lmr);
-                return lmr;
-            }
-        }
-
 
         /// <summary>
         /// Create a reader for an array or list.
         /// </summary>
-        private MethodDefinition CreateCollectionReaderMethodDefinition(TypeReference objectTypeRef, TypeReference elementTypeRef)
+        private MethodReference CreateArrayReaderMethodReference(TypeReference objectTr)
         {
-            MethodDefinition createdReaderMethodDef = CreateStaticReaderStubMethodDefinition(objectTypeRef);
+            MethodDefinition createdReaderMd = CreateStaticReaderStubMethodDefinition(objectTr);
+            AddToStaticReaders(objectTr, createdReaderMd);
+
             /* Try to get instanced first for collection element type, if it doesn't exist then try to
              * get/or make a one. */
+            TypeReference elementTypeRef = objectTr.GetElementType();
             MethodReference readMethodRef = CodegenSession.ReaderHelper.GetOrCreateFavoredReadMethodReference(elementTypeRef, true);
             if (readMethodRef == null)
                 return null;
 
-            ILProcessor processor = createdReaderMethodDef.Body.GetILProcessor();
+            ILProcessor processor = createdReaderMd.Body.GetILProcessor();
 
-            //True if array, false if list.
-            bool isArray = objectTypeRef.IsArray;
-
-            ListMethodReferences lstMethodRefs = null;
-            //If not array get methodRefs needed to create a list writer.
-            if (!isArray)
-            {
-                lstMethodRefs = GetListMethodReferences(elementTypeRef);
-                if (lstMethodRefs == null)
-                    return null;
-
-            }
-
-            ParameterDefinition readerParameterDef = createdReaderMethodDef.Parameters[0];
-
-            VariableDefinition sizeVariableDef = CodegenSession.GeneralHelper.CreateVariable(createdReaderMethodDef, typeof(int));
+            ParameterDefinition readerParameterDef = createdReaderMd.Parameters[0];
+            VariableDefinition sizeVariableDef = CodegenSession.GeneralHelper.CreateVariable(createdReaderMd, typeof(int));
             //Load packed whole value into sizeVariableDef, exit if null indicator.
             CodegenSession.ReaderHelper.CreateRetOnNull(processor, readerParameterDef, sizeVariableDef, false);
 
             //Make local variable of array type.
-            VariableDefinition collectionVariableDef = CodegenSession.GeneralHelper.CreateVariable(createdReaderMethodDef, objectTypeRef);
+            VariableDefinition collectionVariableDef = CodegenSession.GeneralHelper.CreateVariable(createdReaderMd, objectTr);
             //Create new array/list of size.
             processor.Emit(OpCodes.Ldloc, sizeVariableDef);
-            if (isArray)
-            {
-                processor.Emit(OpCodes.Newarr, elementTypeRef);
-            }
-            else
-            {
-                System.Reflection.ConstructorInfo lstConstructor = lstMethodRefs.ListType.GetConstructors()[1];
-                MethodReference constructorMethodRef = CodegenSession.Module.ImportReference(lstConstructor);
-                processor.Emit(OpCodes.Newobj, constructorMethodRef);
-            }
+            processor.Emit(OpCodes.Newarr, elementTypeRef);
             //Store new object of arr/list into collection variable.
             processor.Emit(OpCodes.Stloc, collectionVariableDef);
 
-            VariableDefinition loopIndex = CodegenSession.GeneralHelper.CreateVariable(createdReaderMethodDef, typeof(int));
+            VariableDefinition loopIndex = CodegenSession.GeneralHelper.CreateVariable(createdReaderMd, typeof(int));
             Instruction loopComparer = processor.Create(OpCodes.Ldloc, loopIndex);
 
             //int i = 0
@@ -245,8 +181,7 @@ namespace FishNet.CodeGenerating.Helping
             processor.Append(contentStart);
             /* Only arrays load the index since we are setting to that index.
              * List call lst.Add */
-            if (isArray)
-                processor.Emit(OpCodes.Ldloc, loopIndex);
+            processor.Emit(OpCodes.Ldloc, loopIndex);
             //Collection[index] = reader.
             processor.Emit(OpCodes.Ldarg, readerParameterDef);
             //Pass in AutoPackType default.
@@ -258,10 +193,7 @@ namespace FishNet.CodeGenerating.Helping
             //Collection[index] = reader.ReadType().
             processor.Emit(OpCodes.Call, readMethodRef);
             //Set value to collection.
-            if (isArray)
-                processor.Emit(OpCodes.Stelem_Any, elementTypeRef);
-            else
-                processor.Emit(OpCodes.Callvirt, lstMethodRefs.Add_MethodRef);
+            processor.Emit(OpCodes.Stelem_Any, elementTypeRef);
 
             //i++
             processor.Emit(OpCodes.Ldloc, loopIndex);
@@ -276,28 +208,204 @@ namespace FishNet.CodeGenerating.Helping
             processor.Emit(OpCodes.Ldloc, collectionVariableDef);
             processor.Emit(OpCodes.Ret);
 
-            return createdReaderMethodDef;
+            return CodegenSession.ImportReference(createdReaderMd);
         }
+
+        /// <summary>
+        /// Creates a reader for a dictionary.
+        /// </summary>
+        private MethodReference CreateDictionaryReaderMethodReference(TypeReference objectTr)
+        {
+            GenericInstanceType genericInstance = (GenericInstanceType)objectTr;
+            CodegenSession.ImportReference(genericInstance);
+            TypeReference keyTr = genericInstance.GenericArguments[0];
+            TypeReference valueTr = genericInstance.GenericArguments[1];
+
+            /* Try to get instanced first for collection element type, if it doesn't exist then try to
+             * get/or make a one. */
+            MethodReference keyWriteMr = CodegenSession.ReaderHelper.GetOrCreateFavoredReadMethodReference(keyTr, true);
+            MethodReference valueWriteMr = CodegenSession.ReaderHelper.GetOrCreateFavoredReadMethodReference(valueTr, true);
+            if (keyWriteMr == null || valueWriteMr == null)
+                return null;
+
+            MethodDefinition createdReaderMd = CreateStaticReaderStubMethodDefinition(objectTr);
+            AddToStaticReaders(objectTr, createdReaderMd);
+
+            ILProcessor processor = createdReaderMd.Body.GetILProcessor();
+            GenericInstanceMethod genericInstanceMethod = CodegenSession.ReaderHelper.Reader_ReadDictionary_MethodRef.MakeGenericMethod(new TypeReference[] { keyTr, valueTr });
+
+            ParameterDefinition readerPd = createdReaderMd.Parameters[0];
+            processor.Emit(OpCodes.Ldarg, readerPd);
+            processor.Emit(OpCodes.Callvirt, genericInstanceMethod);
+            processor.Emit(OpCodes.Ret);
+
+            return CodegenSession.ImportReference(createdReaderMd);
+        }
+
+
+        /// <summary>
+        /// Create a reader for a list.
+        /// </summary>
+        private MethodReference CreateListReaderMethodReference(TypeReference objectTr)
+        {
+            GenericInstanceType genericInstance = (GenericInstanceType)objectTr;
+            CodegenSession.ImportReference(genericInstance);
+            TypeReference elementTypeRef = genericInstance.GenericArguments[0];
+
+            /* Try to get instanced first for collection element type, if it doesn't exist then try to
+             * get/or make a one. */
+            MethodReference readMethodRef = CodegenSession.ReaderHelper.GetOrCreateFavoredReadMethodReference(elementTypeRef, true);
+            if (readMethodRef == null)
+                return null;
+
+            MethodDefinition createdReaderMd = CreateStaticReaderStubMethodDefinition(objectTr);
+            AddToStaticReaders(objectTr, createdReaderMd);
+
+            ILProcessor processor = createdReaderMd.Body.GetILProcessor();
+
+            //Find constructor for new list.
+            MethodDefinition constructorMd = objectTr.CachedResolve().GetConstructor(new Type[] { typeof(int) });
+            MethodReference constructorMr = constructorMd.MakeHostInstanceGeneric(genericInstance);
+            //Find add method for list.
+            MethodReference lstAddMd = objectTr.CachedResolve().GetMethod("Add");
+            MethodReference lstAddMr = lstAddMd.MakeHostInstanceGeneric(genericInstance);
+
+            ParameterDefinition readerParameterDef = createdReaderMd.Parameters[0];
+            VariableDefinition sizeVariableDef = CodegenSession.GeneralHelper.CreateVariable(createdReaderMd, typeof(int));
+            //Load packed whole value into sizeVariableDef, exit if null indicator.
+            CodegenSession.ReaderHelper.CreateRetOnNull(processor, readerParameterDef, sizeVariableDef, false);
+
+            //Make variable of new list type, and create list object.
+            VariableDefinition collectionVariableDef = CodegenSession.GeneralHelper.CreateVariable(createdReaderMd, genericInstance);
+            processor.Emit(OpCodes.Ldloc, sizeVariableDef);
+            processor.Emit(OpCodes.Newobj, constructorMr);
+            processor.Emit(OpCodes.Stloc, collectionVariableDef);
+
+            VariableDefinition loopIndex = CodegenSession.GeneralHelper.CreateVariable(createdReaderMd, typeof(int));
+            Instruction loopComparer = processor.Create(OpCodes.Ldloc, loopIndex);
+
+            //int i = 0
+            processor.Emit(OpCodes.Ldc_I4_0);
+            processor.Emit(OpCodes.Stloc, loopIndex);
+            processor.Emit(OpCodes.Br_S, loopComparer);
+
+            //Loop content.
+            //Collection[index]
+            Instruction contentStart = processor.Create(OpCodes.Ldloc, collectionVariableDef);
+            processor.Append(contentStart);
+            //Collection[index] = reader.
+            processor.Emit(OpCodes.Ldarg, readerParameterDef);
+            //Pass in AutoPackType default.
+            if (CodegenSession.ReaderHelper.IsAutoPackedType(elementTypeRef))
+            {
+                AutoPackType packType = CodegenSession.GeneralHelper.GetDefaultAutoPackType(elementTypeRef);
+                processor.Emit(OpCodes.Ldc_I4, (int)packType);
+            }
+            //Collection[index] = reader.ReadType().
+            processor.Emit(OpCodes.Call, readMethodRef);
+            //Set value to collection.
+            processor.Emit(OpCodes.Callvirt, lstAddMr);
+
+            //i++
+            processor.Emit(OpCodes.Ldloc, loopIndex);
+            processor.Emit(OpCodes.Ldc_I4_1);
+            processor.Emit(OpCodes.Add);
+            processor.Emit(OpCodes.Stloc, loopIndex);
+            //if i < length jmp to content start.
+            processor.Append(loopComparer); //if i < size
+            processor.Emit(OpCodes.Ldloc, sizeVariableDef);
+            processor.Emit(OpCodes.Blt_S, contentStart);
+
+            processor.Emit(OpCodes.Ldloc, collectionVariableDef);
+            processor.Emit(OpCodes.Ret);
+
+            return CodegenSession.ImportReference(createdReaderMd);
+        }
+
 
         /// <summary>
         /// Creates a reader method for a struct or class objectTypeRef.
         /// </summary>
-        /// <param name="objectTypeRef"></param>
+        /// <param name="objectTr"></param>
         /// <returns></returns>
-        private MethodDefinition CreateClassOrStructReaderMethodDefinition(TypeReference objectTypeRef)
+        private MethodReference CreateNullableReaderMethodReference(TypeReference objectTr)
         {
-            MethodDefinition createdReaderMethodDef = CreateStaticReaderStubMethodDefinition(objectTypeRef);
-            TypeDefinition objectTypeDef = objectTypeRef.Resolve();
-            ILProcessor processor = createdReaderMethodDef.Body.GetILProcessor();
+            GenericInstanceType objectGit = objectTr as GenericInstanceType;
+            TypeReference valueTr = objectGit.GenericArguments[0];
 
-            ParameterDefinition readerParameterDef = createdReaderMethodDef.Parameters[0];
+            //Make sure object has a ctor.
+            MethodDefinition objectCtorMd = objectTr.GetConstructor(1);
+            if (objectCtorMd == null)
+            {
+                CodegenSession.LogError($"{objectTr.Name} can't be deserialized because the nullable type does not have a constructor.");
+                return null;
+            }
+
+            //Get the reader for the value.
+            MethodReference valueReaderMr = CodegenSession.ReaderHelper.GetOrCreateFavoredReadMethodReference(valueTr, true);
+            if (valueReaderMr == null)
+                return null;
+
+            TypeDefinition objectTd = objectTr.CachedResolve();
+            MethodDefinition createdReaderMd = CreateStaticReaderStubMethodDefinition(objectTr);
+            AddToStaticReaders(objectTr, createdReaderMd);
+
+            ILProcessor processor = createdReaderMd.Body.GetILProcessor();
+
+            ParameterDefinition readerPd = createdReaderMd.Parameters[0];
             // create local for return value
-            VariableDefinition objectVariableDef = CodegenSession.GeneralHelper.CreateVariable(createdReaderMethodDef, objectTypeRef);
+            VariableDefinition resultVd = CodegenSession.GeneralHelper.CreateVariable(createdReaderMd, objectTr);
+
+            //Read if null into boolean.
+            VariableDefinition nullBoolVd = createdReaderMd.CreateVariable(typeof(bool));
+            CodegenSession.ReaderHelper.CreateReadBool(processor, readerPd, nullBoolVd);
+
+            Instruction afterReturnNullInst = processor.Create(OpCodes.Nop);
+            processor.Emit(OpCodes.Ldloc, nullBoolVd);
+            processor.Emit(OpCodes.Brfalse, afterReturnNullInst);
+            //Return a null result.
+            CodegenSession.GeneralHelper.SetVariableDefinitionFromObject(processor, resultVd, objectTd);
+            processor.Emit(OpCodes.Ldloc, resultVd);
+            processor.Emit(OpCodes.Ret);
+            processor.Append(afterReturnNullInst);
+
+            MethodReference initMr = objectCtorMd.MakeHostInstanceGeneric(objectGit);
+            processor.Emit(OpCodes.Ldarg, readerPd);
+            //If an auto pack method then insert default value.
+            if (CodegenSession.ReaderHelper.IsAutoPackedType(valueTr))
+            {
+                AutoPackType packType = CodegenSession.GeneralHelper.GetDefaultAutoPackType(valueTr);
+                processor.Emit(OpCodes.Ldc_I4, (int)packType);
+            }
+            processor.Emit(OpCodes.Call, valueReaderMr);
+            processor.Emit(OpCodes.Newobj, initMr);
+            processor.Emit(OpCodes.Ret);
+
+            return CodegenSession.ImportReference(createdReaderMd);
+        }
+
+
+        /// <summary>
+        /// Creates a reader method for a struct or class objectTypeRef.
+        /// </summary>
+        /// <param name="objectTr"></param>
+        /// <returns></returns>
+        private MethodReference CreateClassOrStructReaderMethodReference(TypeReference objectTr)
+        {
+            MethodDefinition createdReaderMd = CreateStaticReaderStubMethodDefinition(objectTr);
+            AddToStaticReaders(objectTr, createdReaderMd);
+
+            TypeDefinition objectTypeDef = objectTr.CachedResolve();
+            ILProcessor processor = createdReaderMd.Body.GetILProcessor();
+
+            ParameterDefinition readerParameterDef = createdReaderMd.Parameters[0];
+            // create local for return value
+            VariableDefinition objectVariableDef = CodegenSession.GeneralHelper.CreateVariable(createdReaderMd, objectTr);
 
             //If not a value type create a return null check.
             if (!objectTypeDef.IsValueType)
             {
-                VariableDefinition nullVariableDef = CodegenSession.GeneralHelper.CreateVariable(createdReaderMethodDef, typeof(bool));
+                VariableDefinition nullVariableDef = CodegenSession.GeneralHelper.CreateVariable(createdReaderMd, typeof(bool));
                 //Load packed whole value into sizeVariableDef, exit if null indicator.
                 CodegenSession.ReaderHelper.CreateRetOnNull(processor, readerParameterDef, nullVariableDef, true);
             }
@@ -305,30 +413,54 @@ namespace FishNet.CodeGenerating.Helping
             /* If here then not null. */
             //Make a new instance of object type and set to objectVariableDef.
             CodegenSession.GeneralHelper.SetVariableDefinitionFromObject(processor, objectVariableDef, objectTypeDef);
-            if (!ReadFields(processor, readerParameterDef, objectVariableDef, objectTypeRef))
+            if (!ReadFieldsAndProperties(createdReaderMd, readerParameterDef, objectVariableDef, objectTr))
                 return null;
+            /* //codegen scriptableobjects seem to climb too high up to UnityEngine.Object when
+             * creating serializers/deserialized. Make sure this is not possible. */
 
             //Load result and return it.
             processor.Emit(OpCodes.Ldloc, objectVariableDef);
             processor.Emit(OpCodes.Ret);
 
-            return createdReaderMethodDef;
+            return CodegenSession.ImportReference(createdReaderMd);
         }
+
 
         /// <summary>
         /// Reads all fields of objectTypeRef.
         /// </summary>  
-        private bool ReadFields(ILProcessor processor, ParameterDefinition readerParameterDef, VariableDefinition objectVariableDef, TypeReference objectTypeRef)
+        private bool ReadFieldsAndProperties(MethodDefinition readerMd, ParameterDefinition readerPd, VariableDefinition objectVd, TypeReference objectTr)
         {
+            //This probably isn't needed but I'm too afraid to remove it.
+            if (objectTr.Module != CodegenSession.Module)
+                objectTr = CodegenSession.ImportReference(objectTr.CachedResolve());
 
-            foreach (FieldDefinition fieldDef in objectTypeRef.FindAllPublicFields())
+            //Fields.
+            foreach (FieldDefinition fieldDef in objectTr.FindAllPublicFields(true, true,
+                ReaderHelper.EXCLUDED_AUTO_SERIALIZER_TYPES, ReaderHelper.EXCLUDED_ASSEMBLY_PREFIXES))
             {
-                MethodReference readMethodRef = CodegenSession.ReaderHelper.GetOrCreateFavoredReadMethodReference(fieldDef.FieldType, true);
-                //Not all fields will support reading, such as NonSerialized ones.
-                if (readMethodRef == null)
-                    continue;
+                FieldReference importedFr = CodegenSession.ImportReference(fieldDef);
+                if (GetReadMethod(fieldDef.FieldType, out MethodReference readMr))
+                    CodegenSession.ReaderHelper.CreateReadIntoClassOrStruct(readerMd, readerPd, readMr, objectVd, importedFr);
+            }
 
-                CodegenSession.ReaderHelper.CreateReadNoCreateMissing(processor, readerParameterDef, objectVariableDef, fieldDef);
+            //Properties.
+            foreach (PropertyDefinition propertyDef in objectTr.FindAllPublicProperties(
+                true, ReaderHelper.EXCLUDED_AUTO_SERIALIZER_TYPES, ReaderHelper.EXCLUDED_ASSEMBLY_PREFIXES))
+            {
+                if (GetReadMethod(propertyDef.PropertyType, out MethodReference readMr))
+                {
+                    MethodReference setMr = CodegenSession.Module.ImportReference(propertyDef.SetMethod);
+                    CodegenSession.ReaderHelper.CreateReadIntoClassOrStruct(readerMd, readerPd, readMr, objectVd, setMr, propertyDef.PropertyType);
+                }
+            }
+
+            //Gets or creates writer method and outputs it. Returns true if method is found or created.
+            bool GetReadMethod(TypeReference tr, out MethodReference readMr)
+            {
+                tr = CodegenSession.ImportReference(tr);
+                readMr = CodegenSession.ReaderHelper.GetOrCreateFavoredReadMethodReference(tr, true);
+                return (readMr != null);
             }
 
             return true;
@@ -340,11 +472,11 @@ namespace FishNet.CodeGenerating.Helping
         /// </summary>
         /// <param name="objectTypeRef"></param>
         /// <returns></returns>
-        private MethodDefinition CreateStaticReaderStubMethodDefinition(TypeReference objectTypeRef)
+        private MethodDefinition CreateStaticReaderStubMethodDefinition(TypeReference objectTypeRef, string nameExtension = "")
         {
-            string methodName = $"{READ_PREFIX}{objectTypeRef.FullName}";
+            string methodName = $"{READ_PREFIX}{objectTypeRef.FullName}{nameExtension}s";
             // create new reader for this type
-            TypeDefinition readerTypeDef = CodegenSession.GeneralHelper.GetOrCreateClass(out _, GENERATED_TYPE_ATTRIBUTES, GENERATED_CLASS_NAME, null);
+            TypeDefinition readerTypeDef = CodegenSession.GeneralHelper.GetOrCreateClass(out _, GENERATED_TYPE_ATTRIBUTES, GENERATED_READERS_CLASS_NAME, null);
             MethodDefinition readerMethodDef = readerTypeDef.AddMethod(methodName,
                     MethodAttributes.Public |
                     MethodAttributes.Static |

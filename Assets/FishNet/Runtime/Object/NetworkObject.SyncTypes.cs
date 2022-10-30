@@ -2,20 +2,21 @@
 
 namespace FishNet.Object
 {
-    public partial class NetworkObject : MonoBehaviour
+    public sealed partial class NetworkObject : MonoBehaviour
     {
         /// <summary>
         /// Writers dirty SyncTypes for all Networkbehaviours if their write tick has been met.
         /// </summary>
         internal void WriteDirtySyncTypes()
         {
-            foreach (NetworkBehaviour nb in NetworkBehaviours)
+            NetworkBehaviour[] nbs = NetworkBehaviours;
+            int count = nbs.Length;
+            for (int i = 0; i < count; i++)
             {
-                if (nb != null)
-                {
-                    nb.WriteDirtySyncTypes(true, true);
-                    nb.WriteDirtySyncTypes(false, true);
-                }
+                //There was a null check here before, shouldn't be needed so it was removed.
+                NetworkBehaviour nb = nbs[i];
+                nb.WriteDirtySyncTypes(true, true);
+                nb.WriteDirtySyncTypes(false, true);
             }
         }
     }

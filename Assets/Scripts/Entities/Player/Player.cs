@@ -12,7 +12,6 @@ namespace FishRPG.Entities.Player
         private byte _appearanceIndex = 0;
 
         [Header("Components")]
-        public PlayerCombat Combat;
         public PlayerEquipment Equipment;
         public PlayerInput Input;
         public PlayerInventory Inventory;
@@ -37,11 +36,13 @@ namespace FishRPG.Entities.Player
             Visuals = GetComponent<PlayerVisuals>();
         }
 
+
         #region Class
 
         public Appearance GetAppearance() => Class.Appearances[_appearanceIndex];
 
         #endregion
+
 
         // TODO cache a bool[] for if they have a tool when adding items and equipping
         //      or cache Items on server too

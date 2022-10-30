@@ -2,30 +2,26 @@
 using FishNet.Object;
 using UnityEngine;
 
-namespace FirstGearGames.FlexSceneManager.Demos
+namespace FishNet.Example.Scened
 {
 
 
     public class PlayerController : NetworkBehaviour
     {
         [SerializeField]
-        private GameObject _camera = null;
+        private GameObject _camera;
         [SerializeField]
         private float _moveRate = 4f;
         [SerializeField]
         private bool _clientAuth = true;
 
-        public override void OnStartClient(bool isOwner)
+        public override void OnStartClient()
         {
-            base.OnStartClient(isOwner);
-            if (isOwner)
+            base.OnStartClient();
+            if (base.IsOwner)
                 _camera.SetActive(true);
         }
 
-        public override void OnOwnershipClient(NetworkConnection newOwner)
-        {
-            base.OnOwnershipClient(newOwner);
-        }
         private void Update()
         {
             if (!base.IsOwner)
@@ -34,20 +30,23 @@ namespace FirstGearGames.FlexSceneManager.Demos
             float hor = Input.GetAxisRaw("Horizontal");
             float ver = Input.GetAxisRaw("Vertical");
 
-            /* If ground cannot boe found for 20 units then bump up 3 units. 
+            /* If ground cannot be found for 20 units then bump up 3 units. 
              * This is just to keep player on ground if they fall through
              * when changing scenes.             */
-            if (!Physics.Linecast(transform.position + new Vector3(0f, 0.3f, 0f), transform.position - (Vector3.one * 20f)))
-                transform.position += new Vector3(0f, 3f, 0f);
+            if (_clientAuth || (!_clientAuth && base.IsServer))
+            {
+                if (!Physics.Linecast(transform.position + new Vector3(0f, 0.3f, 0f), transform.position - (Vector3.one * 20f)))
+                    transform.position += new Vector3(0f, 3f, 0f);
+            }
 
             if (_clientAuth)
                 Move(hor, ver);
             else
-                RpcMove(hor, ver);
+                ServerMove(hor, ver);
         }
 
         [ServerRpc]
-        private void RpcMove(float hor, float ver)
+        private void ServerMove(float hor, float ver)
         {
             Move(hor, ver);
         }
@@ -67,7 +66,7 @@ namespace FirstGearGames.FlexSceneManager.Demos
                 ver * _moveRate * Time.deltaTime);
 
             transform.position += transform.TransformDirection(direction);
-            transform.Rotate(new Vector3(0f, hor * 0.5f, 0f));
+            transform.Rotate(new Vector3(0f, hor * 100f * Time.deltaTime, 0f));
         }
 
     }

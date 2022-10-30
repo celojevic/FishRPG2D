@@ -1,14 +1,16 @@
 {
-    "name": "Unity.FishNet.CodeGen",
+    "name": "Unity.FishNet.Codegen",
     "references": [
-        "GUID:7c88a4a7926ee5145ad2dfa06f454c67"
+        "FishNet.Runtime",
+        "FishNet.Codegen.Cecil",
+        "FishNet.Generated"
     ],
     "includePlatforms": [
         "Editor"
     ],
     "excludePlatforms": [],
     "allowUnsafeCode": true,
-    "overrideReferences": false,
+    "overrideReferences": true,
     "precompiledReferences": [],
     "autoReferenced": false,
     "defineConstraints": [],

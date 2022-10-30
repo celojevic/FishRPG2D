@@ -11,7 +11,7 @@
 using System;
 using System.IO;
 
-namespace Mono.Cecil {
+namespace MonoFN.Cecil {
 
 	public sealed class EmbeddedResource : Resource {
 
@@ -77,7 +77,7 @@ namespace Mono.Cecil {
 			int read;
 
 			if (stream.CanSeek) {
-				var length = (int) stream.Length;
+				var length = (int)stream.Length;
 				var data = new byte [length];
 				int offset = 0;
 

@@ -1,15 +1,20 @@
-﻿using FishNet.Serializing;
+﻿using FishNet.Broadcast;
+using FishNet.Broadcast.Helping;
+using FishNet.Managing.Logging;
+using FishNet.Managing.Utility;
+using FishNet.Object.Helping;
+using FishNet.Serializing;
+using FishNet.Serializing.Helping;
+using FishNet.Transporting;
+using FishNet.Utility.Extension;
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using UnityEngine;
-using FishNet.Broadcast;
-using FishNet.Object.Helping;
-using FishNet.Transporting;
-using FishNet.Serializing.Helping;
 
 namespace FishNet.Managing.Client
 {
-    public partial class ClientManager
+    public sealed partial class ClientManager : MonoBehaviour
     {
         #region Private.
         /// <summary>
@@ -30,16 +35,15 @@ namespace FishNet.Managing.Client
         /// <summary>
         /// Registers a method to call when a Broadcast arrives.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="T">Type of broadcast being registered.</typeparam>
         /// <param name="handler">Method to call.</param>
         public void RegisterBroadcast<T>(Action<T> handler) where T : struct, IBroadcast
         {
             ushort key = typeof(T).FullName.GetStableHash16();
-
             /* Create delegate and add for
              * handler method. */
             HashSet<ServerBroadcastDelegate> handlers;
-            if (!_broadcastHandlers.TryGetValue(key, out handlers))
+            if (!_broadcastHandlers.TryGetValueIL2CPP(key, out handlers))
             {
                 handlers = new HashSet<ServerBroadcastDelegate>();
                 _broadcastHandlers.Add(key, handlers);
@@ -51,7 +55,7 @@ namespace FishNet.Managing.Client
              * This is so we can unregister the target later. */
             int handlerHashCode = handler.GetHashCode();
             HashSet<(int, ServerBroadcastDelegate)> targetHashCodes;
-            if (!_handlerTargets.TryGetValue(key, out targetHashCodes))
+            if (!_handlerTargets.TryGetValueIL2CPP(key, out targetHashCodes))
             {
                 targetHashCodes = new HashSet<(int, ServerBroadcastDelegate)>();
                 _handlerTargets.Add(key, targetHashCodes);
@@ -63,17 +67,18 @@ namespace FishNet.Managing.Client
         /// <summary>
         /// Unregisters a method call from a Broadcast type.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="T">Type of broadcast being unregistered.</typeparam>
+        /// <param name="handler">Method to unregister.</param>
         public void UnregisterBroadcast<T>(Action<T> handler) where T : struct, IBroadcast
         {
-            ushort key = typeof(T).FullName.GetStableHash16();
+            ushort key = BroadcastHelper.GetKey<T>();
 
             /* If key is found for T then look for
              * the appropriate handler to remove. */
-            if (_broadcastHandlers.TryGetValue(key, out HashSet<ServerBroadcastDelegate> handlers))
+            if (_broadcastHandlers.TryGetValueIL2CPP(key, out HashSet<ServerBroadcastDelegate> handlers))
             {
                 HashSet<(int, ServerBroadcastDelegate)> targetHashCodes;
-                if (_handlerTargets.TryGetValue(key, out targetHashCodes))
+                if (_handlerTargets.TryGetValueIL2CPP(key, out targetHashCodes))
                 {
                     int handlerHashCode = handler.GetHashCode();
                     ServerBroadcastDelegate result = null;
@@ -82,13 +87,21 @@ namespace FishNet.Managing.Client
                         if (targetHashCode == handlerHashCode)
                         {
                             result = del;
+                            targetHashCodes.Remove((targetHashCode, del));
                             break;
                         }
                     }
+                    //If no more in targetHashCodes then remove from handlerTarget.
+                    if (targetHashCodes.Count == 0)
+                        _handlerTargets.Remove(key);
 
                     if (result != null)
                         handlers.Remove(result);
                 }
+
+                //If no more in handlers then remove broadcastHandlers.
+                if (handlers.Count == 0)
+                    _broadcastHandlers.Remove(key);
             }
         }
 
@@ -112,14 +125,13 @@ namespace FishNet.Managing.Client
         /// <summary>
         /// Parses a received broadcast.
         /// </summary>
-        /// <param name="reader"></param>
-        /// <param name="connectionId"></param>
-        private void ParseBroadcast(PooledReader reader)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ParseBroadcast(PooledReader reader, Channel channel)
         {
             ushort key = reader.ReadUInt16();
-
+            int dataLength = Packets.GetPacketLength((ushort)PacketId.Broadcast, reader, channel);
             // try to invoke the handler for that message
-            if (_broadcastHandlers.TryGetValue(key, out HashSet<ServerBroadcastDelegate> handlers))
+            if (_broadcastHandlers.TryGetValueIL2CPP(key, out HashSet<ServerBroadcastDelegate> handlers))
             {
                 int readerStartPosition = reader.Position;
                 /* //muchlater resetting the position could be better by instead reading once and passing in
@@ -132,7 +144,7 @@ namespace FishNet.Managing.Client
             }
             else
             {
-                Debug.LogError($"Broadcast not found for key {key}.");
+                reader.Skip(dataLength);
             }
         }
 
@@ -140,15 +152,16 @@ namespace FishNet.Managing.Client
         /// <summary>
         /// Sends a Broadcast to the server.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="message"></param>
-        /// <param name="channel"></param>
+        /// <typeparam name="T">Type of broadcast to send.</typeparam>
+        /// <param name="message">Broadcast data being sent; for example: an instance of your broadcast type.</param>
+        /// <param name="channel">Channel to send on.</param>
         public void Broadcast<T>(T message, Channel channel = Channel.Reliable) where T : struct, IBroadcast
         {
             //Check local connection state.
             if (!Started)
             {
-                Debug.LogError($"Cannot send broadcast to server because client is not active.");
+                if (NetworkManager.CanLog(LoggingType.Warning))
+                    Debug.LogWarning($"Cannot send broadcast to server because client is not active.");
                 return;
             }
 

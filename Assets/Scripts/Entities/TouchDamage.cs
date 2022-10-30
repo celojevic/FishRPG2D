@@ -38,9 +38,7 @@ public class TouchDamage : NetworkBehaviour
         ResetStayTimer();
         if (other.CompareTag(_otherTag) && other.isTrigger)
         {
-            Health h = other.GetComponent<Health>();
-            if (h)
-                h.Subtract(_damage);
+            other.GetComponent<Health>()?.Subtract(_damage);
         }
     }
 

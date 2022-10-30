@@ -1,15 +1,28 @@
+using FishNet.Documenting;
+using FishNet.Managing.Logging;
 using FishNet.Object;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace FishNet.Managing.Object
 {
 
+    //document
+    [APIExclude]
     [CreateAssetMenu(fileName = "New DualPrefabObjects", menuName = "FishNet/Spawnable Prefabs/Dual Prefab Objects")]
     public class DualPrefabObjects : PrefabObjects
     {
+        /// <summary>
+        /// 
+        /// </summary>
+        [Tooltip("Prefabs which may be spawned.")]
         [SerializeField]
         private List<DualPrefab> _prefabs = new List<DualPrefab>();
+        /// <summary>
+        /// Prefabs which may be spawned.
+        /// </summary>
+        public IReadOnlyCollection<DualPrefab> Prefabs => _prefabs;
 
         public override void Clear()
         {
@@ -24,7 +37,8 @@ namespace FishNet.Managing.Object
         {
             if (id < 0 || id >= _prefabs.Count)
             {
-                Debug.LogError($"PrefabId {id} is out of range.");
+                if (NetworkManager.StaticCanLog(LoggingType.Error))
+                    Debug.LogError($"PrefabId {id} is out of range.");
                 return null;
             }
             else
@@ -33,8 +47,11 @@ namespace FishNet.Managing.Object
                 NetworkObject nob = (asServer) ? dp.Server : dp.Client;
                 if (nob == null)
                 {
-                    string lookupSide = (asServer) ? "server" : "client";
-                    Debug.LogError($"Prefab for {lookupSide} on id {id} is null ");
+                    if (NetworkManager.StaticCanLog(LoggingType.Error))
+                    {
+                        string lookupSide = (asServer) ? "server" : "client";
+                        Debug.LogError($"Prefab for {lookupSide} on id {id} is null ");
+                    }
                 }
 
                 return nob;
@@ -93,15 +110,13 @@ namespace FishNet.Managing.Object
             _prefabs.Add(dp);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override void InitializePrefabRange(int startIndex)
         {
             for (int i = startIndex; i < _prefabs.Count; i++)
             {
-                if (_prefabs[i].Server == null || _prefabs[i].Client == null)
-                    continue;
-
-                _prefabs[i].Server.SetPrefabId((short)i);
-                _prefabs[i].Client.SetPrefabId((short)i);
+                ManagedObjects.InitializePrefab(_prefabs[i].Server, i);
+                ManagedObjects.InitializePrefab(_prefabs[i].Client, i);
             }
         }
 
@@ -109,17 +124,20 @@ namespace FishNet.Managing.Object
         #region Unused.
         public override void AddObject(NetworkObject networkObject, bool checkForDuplicates = false)
         {
-            Debug.LogError($"Single prefabs are not supported with DualPrefabObjects. Make a SinglePrefabObjects asset instead.");
+            if (NetworkManager.StaticCanLog(LoggingType.Error))
+                Debug.LogError($"Single prefabs are not supported with DualPrefabObjects. Make a SinglePrefabObjects asset instead.");
         }
 
         public override void AddObjects(List<NetworkObject> networkObjects, bool checkForDuplicates = false)
         {
-            Debug.LogError($"Single prefabs are not supported with DualPrefabObjects. Make a SinglePrefabObjects asset instead.");
+            if (NetworkManager.StaticCanLog(LoggingType.Error))
+                Debug.LogError($"Single prefabs are not supported with DualPrefabObjects. Make a SinglePrefabObjects asset instead.");
         }
 
         public override void AddObjects(NetworkObject[] networkObjects, bool checkForDuplicates = false)
         {
-            Debug.LogError($"Single prefabs are not supported with DualPrefabObjects. Make a SinglePrefabObjects asset instead.");
+            if (NetworkManager.StaticCanLog(LoggingType.Error))
+                Debug.LogError($"Single prefabs are not supported with DualPrefabObjects. Make a SinglePrefabObjects asset instead.");
         }
         #endregion
     }

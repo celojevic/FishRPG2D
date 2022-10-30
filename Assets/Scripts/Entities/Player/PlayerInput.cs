@@ -7,6 +7,10 @@ public class PlayerInput : MonoBehaviour
     /// Cached input vector each frame.
     /// </summary>
     internal Vector2 InputVector;
+    /// <summary>
+    /// Cached world mouse position.
+    /// </summary>
+    internal Vector2 WorldMousePosition;
 
     [Header("Input Axes")]
     [Tooltip("When true, input axes will use GetAxisRaw, i.e. no acceleration.")]
@@ -15,6 +19,12 @@ public class PlayerInput : MonoBehaviour
     private void Update()
     {
         GetAxes();
+        GetWorldMousePosition();
+    }
+
+    void GetWorldMousePosition()
+    {
+        WorldMousePosition = Utils.GetWorldMousePos();
     }
 
     void GetAxes()

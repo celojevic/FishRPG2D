@@ -11,9 +11,11 @@ namespace FishRPG.Entities.Player
     public class PlayerInit : NetworkBehaviour
     {
 
-        public override void OnStartClient(bool isOwner)
+        public override void OnStartClient()
         {
-            if (isOwner)
+            base.OnStartClient();
+
+            if (IsOwner)
             {
                 // init camera
                 GameObject.FindGameObjectWithTag("MainCamera")
@@ -25,7 +27,7 @@ namespace FishRPG.Entities.Player
             }
 
             // init rigidbody
-            GetComponent<Rigidbody2D>().isKinematic = !isOwner;
+            GetComponent<Rigidbody2D>().isKinematic = !IsOwner;
         }
 
     }

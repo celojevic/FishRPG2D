@@ -8,12 +8,11 @@
 // Licensed under the MIT/X11 license.
 //
 
-using System;
+using MonoFN.Collections.Generic;
 using System.Text;
 using System.Threading;
-using Mono.Collections.Generic;
 
-namespace Mono.Cecil {
+namespace MonoFN.Cecil {
 
 	public sealed class GenericInstanceMethod : MethodSpecification, IGenericInstance, IGenericContext {
 

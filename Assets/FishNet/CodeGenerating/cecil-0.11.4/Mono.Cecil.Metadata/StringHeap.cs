@@ -8,11 +8,10 @@
 // Licensed under the MIT/X11 license.
 //
 
-using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Mono.Cecil.Metadata {
+namespace MonoFN.Cecil.Metadata {
 
 	class StringHeap : Heap {
 
@@ -45,7 +44,7 @@ namespace Mono.Cecil.Metadata {
 		protected virtual string ReadStringAt (uint index)
 		{
 			int length = 0;
-			int start = (int) index;
+			int start = (int)index;
 
 			for (int i = start; ; i++) {
 				if (data [i] == 0)

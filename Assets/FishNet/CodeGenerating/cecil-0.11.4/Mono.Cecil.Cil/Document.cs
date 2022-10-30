@@ -10,7 +10,7 @@
 
 using System;
 
-namespace Mono.Cecil.Cil {
+namespace MonoFN.Cecil.Cil {
 
 	public enum DocumentType {
 		Other,
@@ -107,7 +107,7 @@ namespace Mono.Cecil.Cil {
 			set { hash = value; }
 		}
 
-		public byte[] EmbeddedSource {
+		public byte [] EmbeddedSource {
 			get { return embedded_source; }
 			set { embedded_source = value; }
 		}

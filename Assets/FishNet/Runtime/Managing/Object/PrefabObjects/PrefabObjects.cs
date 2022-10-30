@@ -1,10 +1,13 @@
+using FishNet.Documenting;
 using FishNet.Object;
 using System.Collections.Generic;
 using UnityEngine;
 
 namespace FishNet.Managing.Object
 {
-    public abstract class PrefabObjects : ScriptableObject 
+    //document
+    [APIExclude]
+    public abstract class PrefabObjects : ScriptableObject
     {
         public abstract void Clear();
         public abstract int GetObjectCount();

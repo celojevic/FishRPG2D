@@ -1,9 +1,9 @@
-﻿using FishNet;
-using FishNet.Managing.Scened.Data;
+﻿using FishNet.Managing.Logging;
+using FishNet.Managing.Scened;
 using FishNet.Object;
 using UnityEngine;
 
-namespace FirstGearGames.FlexSceneManager.Demos
+namespace FishNet.Example.Scened
 {
 
     /// <summary>
@@ -22,7 +22,7 @@ namespace FirstGearGames.FlexSceneManager.Demos
         /// </summary>
         [Tooltip("True to only unload for the connectioning causing the trigger.")]
         [SerializeField]
-        private bool _connectionOnly = false;
+        private bool _connectionOnly;
         /// <summary>
         /// True to unload unused scenes.
         /// </summary>
@@ -37,7 +37,7 @@ namespace FirstGearGames.FlexSceneManager.Demos
         private bool _onTriggerEnter = true;
 
 
-        [Server]
+        [Server(Logging = LoggingType.Off)]
         private void OnTriggerEnter(Collider other)
         {
             if (!_onTriggerEnter)
@@ -46,7 +46,7 @@ namespace FirstGearGames.FlexSceneManager.Demos
             UnloadScenes(other.gameObject.GetComponent<NetworkObject>());
         }
 
-        [Server]
+        [Server(Logging = LoggingType.Off)]
         private void OnTriggerExit(Collider other)
         {
             if (_onTriggerEnter)
@@ -70,7 +70,7 @@ namespace FirstGearGames.FlexSceneManager.Demos
 
             UnloadOptions unloadOptions = new UnloadOptions()
             {
-                Mode = (_unloadUnused) ? UnloadOptions.UnloadModes.UnloadUnused : UnloadOptions.UnloadModes.KeepUnused
+                Mode = (_unloadUnused) ? UnloadOptions.ServerUnloadMode.UnloadUnused : UnloadOptions.ServerUnloadMode.KeepUnused
             };
 
             SceneUnloadData sud = new SceneUnloadData(_scenes);

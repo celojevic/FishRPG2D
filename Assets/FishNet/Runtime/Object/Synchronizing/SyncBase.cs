@@ -2,6 +2,7 @@
 using FishNet.Managing.Timing;
 using FishNet.Serializing;
 using FishNet.Transporting;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace FishNet.Object.Synchronizing.Internal
@@ -11,9 +12,13 @@ namespace FishNet.Object.Synchronizing.Internal
 
         #region Public.
         /// <summary>
+        /// True if this SyncBase has been registered within it's containing class.
+        /// </summary>
+        public bool IsRegistered { get; private set; }
+        /// <summary>
         /// True if a SyncObject, false if a SyncVar.
         /// </summary>
-        public bool IsSyncObject { get; private set; } = false;
+        public bool IsSyncObject { get; private set; }
         /// <summary>
         /// The settings for this SyncVar.
         /// </summary>
@@ -25,7 +30,7 @@ namespace FishNet.Object.Synchronizing.Internal
         /// <summary>
         /// True if this SyncVar needs to send data.
         /// </summary>
-        public bool IsDirty { get; private set; } = false;
+        public bool IsDirty { get; private set; }
         /// <summary>
         /// NetworkManager this uses.
         /// </summary>
@@ -52,7 +57,7 @@ namespace FishNet.Object.Synchronizing.Internal
         /// <summary>
         /// Sync interval converted to ticks.
         /// </summary>
-        private uint _timeToTicks = 0;
+        private uint _timeToTicks;
         /// <summary>
         /// Channel to use for next write. To ensure eventual consistency this eventually changes to reliable when Settings are unreliable.
         /// </summary>
@@ -62,14 +67,12 @@ namespace FishNet.Object.Synchronizing.Internal
         /// <summary>
         /// Initializes this SyncBase.
         /// </summary>
-        /// <param name="nb"></param>
-        /// <param name="syncIndex"></param>
-        /// <param name="writePermissions"></param>
-        /// <param name="readPermissions"></param>
-        /// <param name="tickRate"></param>
-        /// <param name="channel"></param>
-        public void InitializeInstance(WritePermission writePermissions, ReadPermission readPermissions, float tickRate, Channel channel, bool isSyncObject)
+        public void InitializeInstance(NetworkBehaviour nb, uint syncIndex, WritePermission writePermissions, ReadPermission readPermissions, float tickRate, Channel channel, bool isSyncObject)
         {
+            NetworkBehaviour = nb;
+            SyncIndex = syncIndex;
+            _currentChannel = channel;
+            IsSyncObject = isSyncObject;
             Settings = new Settings()
             {
                 WritePermission = writePermissions,
@@ -78,19 +81,24 @@ namespace FishNet.Object.Synchronizing.Internal
                 Channel = channel
             };
 
-            _currentChannel = channel;
-            IsSyncObject = isSyncObject;
+            NetworkBehaviour.RegisterSyncType(this, SyncIndex);
         }
 
         /// <summary>
         /// Sets the SyncIndex.
         /// </summary>
-        /// <param name="index"></param>
-        public void SetSyncIndex(NetworkBehaviour nb, uint index)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void SetRegistered()
         {
-            NetworkBehaviour = nb;
-            SyncIndex = index;
-            NetworkBehaviour.RegisterSyncType(this, SyncIndex);
+            Registered();
+        }
+
+        /// <summary>
+        /// Called when the SyncType has been registered, but not yet initialized over the network.
+        /// </summary>
+        protected virtual void Registered()
+        {
+            IsRegistered = true;
         }
 
         /// <summary>
@@ -99,24 +107,32 @@ namespace FishNet.Object.Synchronizing.Internal
         public void PreInitialize(NetworkManager networkManager)
         {
             NetworkManager = networkManager;
-            _timeToTicks = NetworkManager.TimeManager.TimeToTicks(Settings.SendTickRate);
+            _timeToTicks = NetworkManager.TimeManager.TimeToTicks(Settings.SendTickRate, TickRounding.RoundUp);
         }
+
+        /// <summary>
+        /// Called after OnStartXXXX has occurred.
+        /// </summary>
+        /// <param name="asServer">True if OnStartServer was called, false if OnStartClient.</param>
+        public virtual void OnStartCallback(bool asServer) { }
 
         /// <summary>
         /// Dirties this Sync and the NetworkBehaviour.
         /// </summary>
-        public void Dirty()
+        public bool Dirty()
         {
             /* Reset channel even if already dirty.
              * This is because the value might have changed
              * which will reset the eventual consistency state. */
             _currentChannel = Settings.Channel;
 
-            if (IsDirty)
-                return;
+            /* Once dirty don't undirty until it's
+             * processed. This ensures that data
+             * is flushed. */
+            bool canDirty = NetworkBehaviour.DirtySyncType(IsSyncObject);
+            IsDirty |= canDirty;
 
-            if (NetworkBehaviour.DirtySyncType(IsSyncObject))
-                IsDirty = true;
+            return canDirty;
         }
 
         /// <summary>
@@ -140,7 +156,11 @@ namespace FishNet.Object.Synchronizing.Internal
                 IsDirty = false;
             }
         }
-
+        /// <summary>
+        /// True if dirty and enough time has passed to write changes.
+        /// </summary>
+        /// <param name="tick"></param>
+        /// <returns></returns>
         internal bool WriteTimeMet(uint tick)
         {
             return (IsDirty && tick >= NextSyncTick);
@@ -149,20 +169,29 @@ namespace FishNet.Object.Synchronizing.Internal
         /// Writes current value.
         /// </summary>
         /// <param name="writer"></param>
-        ///<param name="resetSyncTick">True to set the next time data may sync.</param>
-        public virtual void Write(PooledWriter writer, bool resetSyncTick = true)
+        /// <param name="resetSyncTick">True to set the next time data may sync.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public virtual void WriteDelta(PooledWriter writer, bool resetSyncTick = true)
+        {
+            WriteHeader(writer, resetSyncTick);
+        }
+        /// <summary>
+        /// Writers the header for this SyncType.
+        /// </summary>
+        /// <param name="writer"></param>
+        /// <param name="resetSyncTick"></param>
+        protected virtual void WriteHeader(PooledWriter writer, bool resetSyncTick = true)
         {
             if (resetSyncTick)
-                NextSyncTick = NetworkManager.TimeManager.Tick +  _timeToTicks;
+                NextSyncTick = NetworkManager.TimeManager.Tick + _timeToTicks;
 
-            //writer.WriteByte((byte)SyncIndex);
-            writer.WriteUInt32(SyncIndex, AutoPackType.Unpacked);
+            writer.WriteByte((byte)SyncIndex);
         }
         /// <summary>
         /// Writes current value if not initialized value.
         /// </summary>
         /// <param name="writer"></param>
-        public virtual void WriteIfChanged(PooledWriter writer) { }
+        public virtual void WriteFull(PooledWriter writer) { }
         /// <summary>
         /// Sets current value.
         /// </summary>

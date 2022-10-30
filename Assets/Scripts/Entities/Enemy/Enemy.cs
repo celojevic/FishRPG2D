@@ -20,6 +20,7 @@ namespace FishRPG.Entities.Enemy
 
         public override void OnStartServer()
         {
+            base.OnStartServer();
             var health = GetVital(VitalType.Health);
             if (health)
                 health.OnDepleted += Enemy_OnDepleted;
@@ -27,6 +28,7 @@ namespace FishRPG.Entities.Enemy
 
         public override void OnStopServer()
         {
+            base.OnStopServer();
             var health = GetVital(VitalType.Health);
             if (health)
                 health.OnDepleted -= Enemy_OnDepleted;

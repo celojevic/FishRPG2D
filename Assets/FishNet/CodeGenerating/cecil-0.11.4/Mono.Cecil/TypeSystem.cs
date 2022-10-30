@@ -8,11 +8,10 @@
 // Licensed under the MIT/X11 license.
 //
 
+using MonoFN.Cecil.Metadata;
 using System;
 
-using Mono.Cecil.Metadata;
-
-namespace Mono.Cecil {
+namespace MonoFN.Cecil {
 
 	public abstract class TypeSystem {
 
@@ -43,7 +42,7 @@ namespace Mono.Cecil {
 
 					for (int i = 0; i < types.Length; i++) {
 						if (types [i] == null)
-							types [i] = reader.GetTypeDefinition ((uint) i + 1);
+							types [i] = reader.GetTypeDefinition ((uint)i + 1);
 
 						var type = types [i];
 

@@ -1,66 +1,135 @@
-﻿using FishNet.Constants;
+﻿using FishNet.Documenting;
+using FishNet.Serializing.Helping;
+using FishNet.Utility.Constant;
 using System.Runtime.CompilerServices;
 using UnityEngine;
 
-[assembly: InternalsVisibleTo(Constants.CODEGEN_ASSEMBLY_NAME)]
+[assembly: InternalsVisibleTo(UtilityConstants.CODEGEN_ASSEMBLY_NAME)]
 namespace FishNet.Object
 {
-
+    /// <summary>
+    /// Scripts which inherit from NetworkBehaviour can be used to gain insight of, and perform actions on the network.
+    /// </summary>
     public abstract partial class NetworkBehaviour : MonoBehaviour
     {
-        #region Debug //debug
-        //[HideInInspector]
-        //public string GivenName;
-        //public void SetGivenName(string s) => GivenName = s;
-        #endregion
-
         /// <summary>
-        /// Returns if this NetworkBehaviour is spawned.
+        /// True if this NetworkBehaviour is initialized for the network.
         /// </summary>
-        public bool IsSpawned => (NetworkObject != null && NetworkObject.IsSpawned);
-
+        public bool IsSpawned => _networkObjectCache.IsSpawned;
+        /// <summary>
+        /// 
+        /// </summary>
+        [SerializeField, HideInInspector]
+        private byte _componentIndexCache = byte.MaxValue;
         /// <summary>
         /// ComponentIndex for this NetworkBehaviour.
         /// </summary>
-        public byte ComponentIndex { get; private set; } = 0;
+        public byte ComponentIndex
+        {
+            get => _componentIndexCache;
+            private set => _componentIndexCache = value;
+        }
+#if UNITY_EDITOR
+        /// <summary>
+        /// NetworkObject automatically added or discovered during edit time.
+        /// </summary>
+        [SerializeField, HideInInspector]
+        private NetworkObject _addedNetworkObject;
+#endif 
+        /// <summary>
+        /// 
+        /// </summary>
+        [SerializeField, HideInInspector]
+        private NetworkObject _networkObjectCache;
         /// <summary>
         /// NetworkObject this behaviour is for.
-        /// </summary>        
-        public NetworkObject NetworkObject { get; private set; } = null;
-
+        /// </summary>
+        public NetworkObject NetworkObject => _networkObjectCache;
 
         /// <summary>
-        /// Prepares this script for initialization.
+        /// Initializes this script. This will only run once even as host.
         /// </summary>
         /// <param name="networkObject"></param>
         /// <param name="componentIndex"></param>
-        public void PreInitialize(NetworkObject networkObject, byte componentIndex)
+        internal void InitializeOnceInternal()
         {
-            NetworkObject = networkObject;
-            ComponentIndex = componentIndex;
-            PreInitializeSyncTypes(networkObject);
-            PreInitializeCallbacks(networkObject);
+            InitializeOnceSyncTypes();
+            InitializeOnceRpcLinks();
         }
 
 
+        /// <summary>
+        /// Serializes information for network components.
+        /// </summary>
+        internal void SerializeComponents(NetworkObject nob, byte componentIndex)
+        {
+            _networkObjectCache = nob;
+            ComponentIndex = componentIndex;
+        }
+
+        /// <summary>
+        /// Manually initializes network content for the NetworkBehaviour if the object it's on is disabled.
+        /// </summary>
+        internal void InitializeIfDisabled()
+        {
+            if (gameObject.activeInHierarchy)
+                return;
+
+            NetworkInitializeIfDisabledInternal();
+        }
+        /// <summary>
+        /// Long name is to prevent users from potentially creating their own method named the same.
+        /// </summary>
+        [CodegenMakePublic] //internal.
+        [APIExclude]
+        protected internal virtual void NetworkInitializeIfDisabledInternal() { }
         #region Editor.
-#if UNITY_EDITOR
         protected virtual void Reset()
         {
+#if UNITY_EDITOR
+            if (Application.isPlaying)
+                return;
+
+            //NetworkObject nob = TryAddNetworkObject();
             TryAddNetworkObject();
+            //nob.UpdateNetworkBehaviours();
+#endif
         }
 
         protected virtual void OnValidate()
         {
+#if UNITY_EDITOR
+            if (Application.isPlaying)
+                return;
+
             TryAddNetworkObject();
+            //NetworkObject nob = TryAddNetworkObject();
+            ////If componentIndex has not been set.
+            //if (ComponentIndex == byte.MaxValue)
+            //    nob.UpdateNetworkBehaviours();
+#endif
         }
+
+        /// <summary>
+        /// Resets this NetworkBehaviour so that it may be added to an object pool.
+        /// </summary>
+        internal void ResetForObjectPool()
+        {
+            ResetSyncTypes();
+            ClearReplicateCache();
+            ClearBuffedRpcs();
+        }
+
+
         /// <summary>
         /// Tries to add the NetworkObject component.
         /// </summary>
-        private void TryAddNetworkObject()
+        private NetworkObject TryAddNetworkObject()
         {
-            if (NetworkObject != null)
-                return;
+#if UNITY_EDITOR
+            if (Application.isPlaying || _addedNetworkObject != null)
+                return _addedNetworkObject;
+
             /* Manually iterate up the chain because GetComponentInParent doesn't
              * work when modifying prefabs in the inspector. Unity, you're starting
              * to suck a lot right now. */
@@ -75,9 +144,12 @@ namespace FishNet.Object
                     climb = climb.parent;
             }
 
-            NetworkObject = (result != null) ? result : transform.root.gameObject.AddComponent<NetworkObject>();
-        }
+            _addedNetworkObject = (result != null) ? result : transform.root.gameObject.AddComponent<NetworkObject>();
+            return _addedNetworkObject;
+#else
+            return null;
 #endif
+        }
         #endregion
     }
 

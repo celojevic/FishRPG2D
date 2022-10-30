@@ -8,11 +8,10 @@
 // Licensed under the MIT/X11 license.
 //
 
+using MonoFN.Collections.Generic;
 using System;
 
-using Mono.Collections.Generic;
-
-namespace Mono.Cecil {
+namespace MonoFN.Cecil {
 
 	public interface IAssemblyResolver : IDisposable {
 		AssemblyDefinition Resolve (AssemblyNameReference name);
@@ -107,19 +106,19 @@ namespace Mono.Cecil {
 
 			switch (scope.MetadataScopeType) {
 			case MetadataScopeType.AssemblyNameReference:
-				var assembly = assembly_resolver.Resolve ((AssemblyNameReference) scope);
+				var assembly = assembly_resolver.Resolve ((AssemblyNameReference)scope);
 				if (assembly == null)
 					return null;
 
 				return GetType (assembly.MainModule, type);
 			case MetadataScopeType.ModuleDefinition:
-				return GetType ((ModuleDefinition) scope, type);
+				return GetType ((ModuleDefinition)scope, type);
 			case MetadataScopeType.ModuleReference:
 				if (type.Module.Assembly == null)
 					return null;
 
 				var modules = type.Module.Assembly.Modules;
-				var module_ref = (ModuleReference) scope;
+				var module_ref = (ModuleReference)scope;
 				for (int i = 0; i < modules.Count; i++) {
 					var netmodule = modules [i];
 					if (netmodule.Name == module_ref.Name)
@@ -323,13 +322,13 @@ namespace Mono.Cecil {
 				return false;
 
 			if (a.IsGenericInstance)
-				return AreSame ((GenericInstanceType) a, (GenericInstanceType) b);
+				return AreSame ((GenericInstanceType)a, (GenericInstanceType)b);
 
 			if (a.IsRequiredModifier || a.IsOptionalModifier)
-				return AreSame ((IModifierType) a, (IModifierType) b);
+				return AreSame ((IModifierType)a, (IModifierType)b);
 
 			if (a.IsArray)
-				return AreSame ((ArrayType) a, (ArrayType) b);
+				return AreSame ((ArrayType)a, (ArrayType)b);
 
 			return true;
 		}
@@ -378,10 +377,10 @@ namespace Mono.Cecil {
 				return false;
 
 			if (a.IsGenericParameter)
-				return AreSame ((GenericParameter) a, (GenericParameter) b);
+				return AreSame ((GenericParameter)a, (GenericParameter)b);
 
 			if (a.IsTypeSpecification ())
-				return AreSame ((TypeSpecification) a, (TypeSpecification) b);
+				return AreSame ((TypeSpecification)a, (TypeSpecification)b);
 
 			if (a.Name != b.Name || a.Namespace != b.Namespace)
 				return false;

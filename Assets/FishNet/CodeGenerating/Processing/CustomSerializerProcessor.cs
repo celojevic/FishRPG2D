@@ -2,9 +2,10 @@
 using FishNet.CodeGenerating.Helping;
 using FishNet.CodeGenerating.Helping.Extension;
 using FishNet.Serializing;
-using Mono.Cecil;
-using Mono.Cecil.Cil;
+using MonoFN.Cecil;
+using MonoFN.Cecil.Cil;
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace FishNet.CodeGenerating.Processing
 {
@@ -35,8 +36,10 @@ namespace FishNet.CodeGenerating.Processing
                 ExtensionType extensionType = GetExtensionType(methodDef);
                 if (extensionType == ExtensionType.None)
                     continue;
+                if (CodegenSession.GeneralHelper.CodegenExclude(methodDef))
+                    continue;
 
-                MethodReference methodRef = CodegenSession.Module.ImportReference(methodDef);
+                MethodReference methodRef = CodegenSession.ImportReference(methodDef);
                 if (extensionType == ExtensionType.Write)
                 {
                     CodegenSession.WriterHelper.AddWriterMethod(methodRef.Parameters[1].ParameterType, methodRef, false, true);
@@ -71,7 +74,9 @@ namespace FishNet.CodeGenerating.Processing
                 ExtensionType extensionType = GetExtensionType(methodDef);
                 if (extensionType == ExtensionType.None)
                     continue;
-
+                if (CodegenSession.GeneralHelper.CodegenExclude(methodDef))
+                    continue;
+                 
                 declaredMethods.Add((methodDef, extensionType));
                 modified = true;
             }
@@ -101,7 +106,7 @@ namespace FishNet.CodeGenerating.Processing
         /// </summary>
         /// <param name="methodDef"></param>
         /// <param name="instructionIndex"></param>
-        private void CheckToModifyInstructions(ExtensionType extensionType,  MethodDefinition methodDef, ref int instructionIndex)
+        private void CheckToModifyInstructions(ExtensionType extensionType, MethodDefinition methodDef, ref int instructionIndex)
         {
             Instruction instruction = methodDef.Body.Instructions[instructionIndex];
             //Fields.
@@ -118,7 +123,7 @@ namespace FishNet.CodeGenerating.Processing
         /// </summary>
         /// <param name="methodDef"></param>
         /// <param name="instructionIndex"></param>
-        private void CheckFieldReferenceInstruction(ExtensionType extensionType,  MethodDefinition methodDef, ref int instructionIndex)
+        private void CheckFieldReferenceInstruction(ExtensionType extensionType, MethodDefinition methodDef, ref int instructionIndex)
         {
             Instruction instruction = methodDef.Body.Instructions[instructionIndex];
             FieldReference field = (FieldReference)instruction.Operand;
@@ -128,7 +133,6 @@ namespace FishNet.CodeGenerating.Processing
             {
                 GenericInstanceType typeGenericInst = (GenericInstanceType)type;
                 TypeReference parameterType = typeGenericInst.GenericArguments[0];
-
                 CreateReaderOrWriter(extensionType, methodDef, ref instructionIndex, parameterType);
             }
         }
@@ -142,7 +146,7 @@ namespace FishNet.CodeGenerating.Processing
         /// <param name="methodDef"></param>
         /// <param name="instructionIndex"></param>
         /// <param name="method"></param>
-        private void CheckCallInstruction(ExtensionType extensionType,  MethodDefinition methodDef, ref int instructionIndex, MethodReference method)
+        private void CheckCallInstruction(ExtensionType extensionType, MethodDefinition methodDef, ref int instructionIndex, MethodReference method)
         {
             if (!method.IsGenericInstance)
                 return;
@@ -176,14 +180,17 @@ namespace FishNet.CodeGenerating.Processing
         {
             if (!parameterType.IsGenericParameter && parameterType.CanBeResolved())
             {
-                TypeDefinition typeDefinition = parameterType.Resolve();
+                TypeDefinition typeDefinition = parameterType.CachedResolve();
                 //If class and not value type check for accessible constructor.
                 if (typeDefinition.IsClass && !typeDefinition.IsValueType)
                 {
                     MethodDefinition constructor = typeDefinition.GetMethod(".ctor");
                     //Constructor is inaccessible, cannot create serializer for type.
-                    if (!constructor.IsPublic || !(constructor.IsAssembly && typeDefinition.Module == CodegenSession.Module))
+                    if (!constructor.IsPublic)
+                    {
+                        CodegenSession.LogError($"Unable to generator serializers for {typeDefinition.FullName} because it's constructor is not public.");
                         return;
+                    }
                 }
 
                 ILProcessor processor = methodDef.Body.GetILProcessor();
@@ -238,12 +245,37 @@ namespace FishNet.CodeGenerating.Processing
                 return ExtensionType.None;
 
             bool write = (methodDef.ReturnType == methodDef.Module.TypeSystem.Void);
+
+            //Return None for Mirror types.
+#if MIRROR
+            if (write)
+            {
+                if (methodDef.Parameters.Count > 0 && methodDef.Parameters[0].ParameterType.FullName == "Mirror.NetworkWriter")
+                    return ExtensionType.None;                    
+            }
+            else
+            {
+                if (methodDef.Parameters.Count > 0 && methodDef.Parameters[0].ParameterType.FullName == "Mirror.NetworkReader")
+                    return ExtensionType.None;
+            }
+#endif
+
+
             string prefix = (write) ?
                 WriterHelper.WRITE_PREFIX : ReaderHelper.READ_PREFIX;
 
             //Does not contain prefix.
             if (methodDef.Name.Length < prefix.Length || methodDef.Name.Substring(0, prefix.Length) != prefix)
                 return ExtensionType.None;
+
+            //Make sure first parameter is right.
+            if (methodDef.Parameters.Count >= 1)
+            {
+                TypeReference tr = methodDef.Parameters[0].ParameterType;
+                if (tr.FullName != CodegenSession.WriterHelper.Writer_TypeRef.FullName &&
+                    tr.FullName != CodegenSession.ReaderHelper.Reader_TypeRef.FullName)
+                    return ExtensionType.None;
+            }
 
             if (write && methodDef.Parameters.Count < 2)
             {

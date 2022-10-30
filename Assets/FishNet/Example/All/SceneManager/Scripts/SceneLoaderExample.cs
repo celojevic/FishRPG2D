@@ -1,11 +1,11 @@
-﻿using FishNet;
-using FishNet.Connection;
-using FishNet.Managing.Scened.Data;
+﻿using FishNet.Connection;
+using FishNet.Managing.Logging;
+using FishNet.Managing.Scened;
 using FishNet.Object;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace FirstGearGames.FlexSceneManager.Demos
+namespace FishNet.Example.Scened
 {
 
     /// <summary>
@@ -25,13 +25,13 @@ namespace FirstGearGames.FlexSceneManager.Demos
         /// </summary>
         [Tooltip("True to move all connection objects (clients).")]
         [SerializeField]
-        private bool _moveAllObjects = false;
+        private bool _moveAllObjects;
         /// <summary>
         /// True to replace current scenes with new scenes. First scene loaded will become active scene.
         /// </summary>
         [Tooltip("True to replace current scenes with new scenes. First scene loaded will become active scene.")]
         [SerializeField]
-        private bool _replaceScenes = false;
+        private bool _replaceScenes;
         /// <summary>
         /// Scenes to load.
         /// </summary>
@@ -43,7 +43,7 @@ namespace FirstGearGames.FlexSceneManager.Demos
         /// </summary>
         [Tooltip("True to only unload for the connectioning causing the trigger.")]
         [SerializeField]
-        private bool _connectionOnly = false;
+        private bool _connectionOnly;
         /// <summary>
         /// True to automatically unload the loaded scenes when no more connections are using them.
         /// </summary>
@@ -66,7 +66,7 @@ namespace FirstGearGames.FlexSceneManager.Demos
         private Dictionary<NetworkConnection, float> _triggeredTimes = new Dictionary<NetworkConnection, float>();
 
 
-        [Server]
+        [Server(Logging = LoggingType.Off)]
         private void OnTriggerEnter(Collider other)
         {
             if (!_onTriggerEnter)
@@ -75,7 +75,7 @@ namespace FirstGearGames.FlexSceneManager.Demos
             LoadScene(other.GetComponent<NetworkObject>());
         }
 
-        [Server]
+        [Server(Logging = LoggingType.Off)]
         private void OnTriggerExit(Collider other)
         {
             if (_onTriggerEnter)
@@ -124,7 +124,7 @@ namespace FirstGearGames.FlexSceneManager.Demos
 
             //Make scene data.
             SceneLoadData sld = new SceneLoadData(_scenes);
-            sld.ReplaceScenes = _replaceScenes;
+            sld.ReplaceScenes = (_replaceScenes) ? ReplaceOption.All : ReplaceOption.None;
             sld.Options = loadOptions;
             sld.MovedNetworkObjects = movedObjects.ToArray();
 

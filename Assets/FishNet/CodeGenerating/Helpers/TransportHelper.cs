@@ -1,5 +1,5 @@
-﻿using Mono.Cecil;
-using FishNet.Transporting;
+﻿using FishNet.Transporting;
+using MonoFN.Cecil;
 
 namespace FishNet.CodeGenerating.Helping
 {
@@ -27,7 +27,7 @@ namespace FishNet.CodeGenerating.Helping
         {
             ResetValues();
 
-            Channel_TypeRef = CodegenSession.Module.ImportReference(typeof(Channel));
+            Channel_TypeRef = CodegenSession.ImportReference(typeof(Channel));
 
             return true;
         }

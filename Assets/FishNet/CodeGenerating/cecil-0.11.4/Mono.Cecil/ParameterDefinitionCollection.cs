@@ -8,11 +8,9 @@
 // Licensed under the MIT/X11 license.
 //
 
-using System;
+using MonoFN.Collections.Generic;
 
-using Mono.Collections.Generic;
-
-namespace Mono.Cecil {
+namespace MonoFN.Cecil {
 
 	sealed class ParameterDefinitionCollection : Collection<ParameterDefinition> {
 

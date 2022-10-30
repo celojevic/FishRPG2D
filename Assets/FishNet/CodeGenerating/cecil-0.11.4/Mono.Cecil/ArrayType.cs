@@ -8,13 +8,13 @@
 // Licensed under the MIT/X11 license.
 //
 
+using MonoFN.Collections.Generic;
 using System;
 using System.Text;
 using System.Threading;
-using Mono.Collections.Generic;
-using MD = Mono.Cecil.Metadata;
+using MD = MonoFN.Cecil.Metadata;
 
-namespace Mono.Cecil {
+namespace MonoFN.Cecil {
 
 	public struct ArrayDimension {
 

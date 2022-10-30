@@ -1,5 +1,7 @@
 ﻿using FishNet.Broadcast;
 using FishNet.Managing;
+using FishNet.Managing.Logging;
+using FishNet.Managing.Transporting;
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
@@ -10,18 +12,15 @@ namespace FishNet.Connection
     public partial class NetworkConnection
     {
 
-        #region Public.
+        #region Private.
         /// <summary>
         /// PacketBundles to send to this connection. An entry will be made for each channel.
         /// </summary>
         private List<PacketBundle> _toClientBundles = new List<PacketBundle>();
-        #endregion
-
-        #region Private.
         /// <summary>
         /// True if this object has been dirtied.
         /// </summary>
-        private bool _serverDirtied = false;
+        private bool _serverDirtied;
         #endregion
 
         /// <summary>
@@ -29,11 +28,10 @@ namespace FishNet.Connection
         /// </summary>
         private void InitializeBuffer()
         {
-            int channels = NetworkManager.TransportManager.Transport.GetChannelCount();
-            for (byte i = 0; i < channels; i++)
+            for (byte i = 0; i < TransportManager.CHANNEL_COUNT; i++)
             {
                 int mtu = NetworkManager.TransportManager.Transport.GetMTU(i);
-                _toClientBundles.Add(new PacketBundle(mtu));
+                _toClientBundles.Add(new PacketBundle(NetworkManager, mtu));
             }
         }
 
@@ -41,34 +39,43 @@ namespace FishNet.Connection
         /// <summary>
         /// Sends a broadcast to this connection.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="message"></param>
-        /// <param name="channel"></param>
-        public void Broadcast<T>(T message, bool requireAuthenticated = true,  Channel channel = Channel.Reliable) where T : struct, IBroadcast
+        /// <typeparam name="T">Type of broadcast to send.</typeparam>
+        /// <param name="message">Broadcast data being sent; for example: an instance of your broadcast type.</param>
+        /// <param name="requireAuthenticated">True if the client must be authenticated for this broadcast to send.</param>
+        /// <param name="channel">Channel to send on.</param>
+        public void Broadcast<T>(T message, bool requireAuthenticated = true, Channel channel = Channel.Reliable) where T : struct, IBroadcast
         {
-            if (!IsValid)
-                Debug.LogError($"Connection is not valid, cannot send broadcast.");
+            if (!IsActive)
+            {
+                if (NetworkManager.CanLog(LoggingType.Error))
+                    Debug.LogError($"Connection is not valid, cannot send broadcast.");
+            }
             else
-                InstanceFinder.ServerManager.Broadcast<T>(this, message, requireAuthenticated,channel);
+            {
+                NetworkManager.ServerManager.Broadcast<T>(this, message, requireAuthenticated, channel);
+            }
         }
 
         /// <summary>
         /// Sends data from the server to a client.
         /// </summary>
-        /// <param name="channel"></param>
-        /// <param name="segment"></param>
-        /// <param name="connectionId"></param>
-        internal void SendToClient(byte channel, ArraySegment<byte> segment)
+        /// <param name="forceNewBuffer">True to force data into a new buffer.</param>
+        internal void SendToClient(byte channel, ArraySegment<byte> segment, bool forceNewBuffer = false)
         {
             //Cannot send data when disconnecting.
             if (Disconnecting)
                 return;
-            if (!IsValid)
-                throw new ArgumentException($"NetworkConnection is not valid.");
-            if (channel >= _toClientBundles.Count)
-                throw new ArgumentException($"Channel {channel} is out of bounds.");
 
-            _toClientBundles[channel].Write(segment);
+            if (!IsActive)
+            {
+                NetworkManager.LogWarning($"Data cannot be sent to connection {ClientId} because it is not active.");
+                return;
+            }
+            //If channel is out of bounds then default to the first channel.
+            if (channel >= _toClientBundles.Count)
+                channel = 0;
+
+            _toClientBundles[channel].Write(segment, forceNewBuffer);
             ServerDirty();
         }
 

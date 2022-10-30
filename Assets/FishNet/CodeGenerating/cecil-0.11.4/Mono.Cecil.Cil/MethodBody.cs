@@ -8,12 +8,11 @@
 // Licensed under the MIT/X11 license.
 //
 
+using MonoFN.Collections.Generic;
 using System;
 using System.Threading;
 
-using Mono.Collections.Generic;
-
-namespace Mono.Cecil.Cil {
+namespace MonoFN.Cecil.Cil {
 
 	public sealed class MethodBody {
 
@@ -369,7 +368,7 @@ namespace Mono.Cecil.Cil {
 			public Instruction Instruction;
 		}
 
-		InstructionOffset ResolveInstructionOffset(InstructionOffset inputOffset, ref InstructionOffsetCache cache)
+		InstructionOffset ResolveInstructionOffset (InstructionOffset inputOffset, ref InstructionOffsetCache cache)
 		{
 			if (inputOffset.IsResolved)
 				return inputOffset;

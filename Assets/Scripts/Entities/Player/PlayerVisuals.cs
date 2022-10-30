@@ -28,6 +28,7 @@ namespace FishRPG.Entities.Player
             if (_sr == null)
                 GetComponentInChildren<SpriteRenderer>();
             AssignClassData();
+            ClearEquipmentSprites();
         }
 
         void AssignClassData()
@@ -91,6 +92,17 @@ namespace FishRPG.Entities.Player
         public void SetEquipmentSprite(EquipmentSlot slot, Sprite sprite)
         {
             _equipmentRenderers[(int)slot].sprite = sprite;
+        }
+        public void SetEquipmentSprite(int slotIndex, Sprite sprite)
+        {
+            _equipmentRenderers[slotIndex].sprite = sprite;
+        }
+        void ClearEquipmentSprites()
+        {
+            for (int i = 0; i < _equipmentRenderers.Length; i++)
+            {
+                _equipmentRenderers[i].sprite = null;
+            }
         }
 
         private enum Anim : byte

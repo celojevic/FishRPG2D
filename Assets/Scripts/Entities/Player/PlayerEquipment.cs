@@ -10,6 +10,7 @@ namespace FishRPG.Entities.Player
     public class PlayerEquipment : NetworkBehaviour
     {
 
+        [SyncObject]
         public readonly SyncList<NetEquipment> NetEquipment = new SyncList<NetEquipment>();
         [EnumNameArray(typeof(EquipmentSlot))]
         public List<EquipmentItem> Equipment = new List<EquipmentItem>();
@@ -26,6 +27,7 @@ namespace FishRPG.Entities.Player
             for (EquipmentSlot i = 0; i < EquipmentSlot.Count; i++)
                 NetEquipment.Add(null);
         }
+
 
         #region Client Synclist Callbacks
 
@@ -50,7 +52,7 @@ namespace FishRPG.Entities.Player
             {
                 case SyncListOperation.Set:
                     Equipment[index] = newItem?.ToEquipItem();
-                    _player.Visuals.SetEquipmentSprite((EquipmentSlot)index, Equipment[index]?.Sprite);
+                    _player.Visuals.SetEquipmentSprite(index, Equipment[index]?.Sprite);
                     break;
             }
 
@@ -63,6 +65,7 @@ namespace FishRPG.Entities.Player
         }
 
         #endregion
+
 
         #region Server
 
@@ -101,6 +104,7 @@ namespace FishRPG.Entities.Player
         }
 
         #endregion
+
 
     }
 }

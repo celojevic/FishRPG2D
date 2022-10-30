@@ -8,11 +8,10 @@
 // Licensed under the MIT/X11 license.
 //
 
+using MonoFN.Collections.Generic;
 using System;
 
-using Mono.Collections.Generic;
-
-namespace Mono.Cecil {
+namespace MonoFN.Cecil {
 
 	sealed class MemberDefinitionCollection<T> : Collection<T> where T : IMemberDefinition {
 

@@ -8,14 +8,12 @@
 // Licensed under the MIT/X11 license.
 //
 
+using MonoFN.Cecil.Metadata;
+using MonoFN.Collections.Generic;
 using System;
 using System.Collections.Generic;
 
-using Mono.Cecil.Metadata;
-
-using Mono.Collections.Generic;
-
-namespace Mono.Cecil {
+namespace MonoFN.Cecil {
 
 	using Slot = Row<string, string>;
 

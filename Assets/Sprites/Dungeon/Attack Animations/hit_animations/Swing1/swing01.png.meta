@@ -57,6 +57,7 @@ TextureImporter:
   streamingMipmaps: 0
   streamingMipmapsPriority: 0
   vTOnly: 0
+  ignoreMasterTextureLimit: 0
   grayScaleToAlpha: 0
   generateCubemap: 6
   cubemapConvolution: 0
@@ -376,6 +377,18 @@ TextureImporter:
     edges: []
     weights: []
     secondaryTextures: []
+    nameFileIdTable:
+      swing01_8: 1012048034895245980
+      swing01_3: 6642674159793966963
+      swing01_4: -595580913373748457
+      swing01_9: -1730949674549017210
+      swing01_6: -7292135283504749587
+      swing01_1: 1533475038164221628
+      swing01_7: -2467169569185153822
+      swing01_10: 2441909260843331658
+      swing01_5: 1671935285420303532
+      swing01_0: 8276614259392965070
+      swing01_2: 4536736733197493270
   spritePackingTag: 
   pSDRemoveMatte: 0
   pSDShowRemoveMatteOption: 0

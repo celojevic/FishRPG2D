@@ -6,7 +6,9 @@
         Unset,
         Variable,
         List,
-        Dictionary
+        Dictionary,
+        HashSet,
+        Custom
     }
 
 }

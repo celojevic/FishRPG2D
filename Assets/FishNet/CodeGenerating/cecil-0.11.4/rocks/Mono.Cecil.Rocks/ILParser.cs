@@ -8,14 +8,13 @@
 // Licensed under the MIT/X11 license.
 //
 
+using MonoFN.Cecil.Cil;
+using MonoFN.Collections.Generic;
 using System;
 
-using Mono.Cecil.Cil;
-using Mono.Collections.Generic;
+namespace MonoFN.Cecil.Rocks {
 
-namespace Mono.Cecil.Rocks {
-
-#if INSIDE_ROCKS
+#if UNITY_EDITOR
 	public
 #endif
 	interface IILVisitor {
@@ -37,7 +36,7 @@ namespace Mono.Cecil.Rocks {
 		void OnInlineMethod (OpCode opcode, MethodReference method);
 	}
 
-#if INSIDE_ROCKS
+#if UNITY_EDITOR
 	public
 #endif
 	static class ILParser {
@@ -192,14 +191,14 @@ namespace Mono.Cecil.Rocks {
 					case TokenType.TypeDef:
 					case TokenType.TypeRef:
 					case TokenType.TypeSpec:
-						visitor.OnInlineType (opcode, (TypeReference) member);
+						visitor.OnInlineType (opcode, (TypeReference)member);
 						break;
 					case TokenType.Method:
 					case TokenType.MethodSpec:
-						visitor.OnInlineMethod (opcode, (MethodReference) member);
+						visitor.OnInlineMethod (opcode, (MethodReference)member);
 						break;
 					case TokenType.Field:
-						visitor.OnInlineField (opcode, (FieldReference) member);
+						visitor.OnInlineField (opcode, (FieldReference)member);
 						break;
 					case TokenType.MemberRef:
 						var field_ref = member as FieldReference;

@@ -1,10 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using Mono.Cecil;
+﻿using FishNet.CodeGenerating.Helping.Extension;
+using FishNet.Object;
 using FishNet.Serializing;
-using Mono.Cecil.Cil;
-using FishNet.CodeGenerating.Helping.Extension;
-using Unity.CompilationPipeline.Common.Diagnostics;
+using MonoFN.Cecil;
+using MonoFN.Cecil.Cil;
 using UnityEngine;
 
 namespace FishNet.CodeGenerating.Helping
@@ -12,13 +10,8 @@ namespace FishNet.CodeGenerating.Helping
     internal class WriterGenerator
     {
 
-
-        #region Reflection references.
-        private Dictionary<TypeReference, ListMethodReferences> _cachedListMethodRefs = new Dictionary<TypeReference, ListMethodReferences>();
-        #endregion
-
         #region Const.
-        public const string GENERATED_CLASS_NAME = "GeneratedReadersAndWriters";
+        internal const string GENERATED_WRITERS_CLASS_NAME = "GeneratedWriters___FN";
         public const TypeAttributes GENERATED_TYPE_ATTRIBUTES = (TypeAttributes.BeforeFieldInit | TypeAttributes.Class | TypeAttributes.AnsiClass |
             TypeAttributes.Public | TypeAttributes.AutoClass | TypeAttributes.Abstract | TypeAttributes.Sealed);
         private const string WRITE_PREFIX = "Write___";
@@ -37,70 +30,81 @@ namespace FishNet.CodeGenerating.Helping
         /// <summary>
         /// Generates a writer for objectTypeReference if one does not already exist.
         /// </summary>
-        /// <param name="objectTypeRef"></param>
+        /// <param name="objectTr"></param>
         /// <returns></returns>
-        internal MethodReference CreateWriter(TypeReference objectTypeRef)
+        internal MethodReference CreateWriter(TypeReference objectTr)
         {
             MethodReference methodRefResult = null;
-            TypeDefinition objectTypeDef;
-            SerializerType serializerType = GeneratorHelper.GetSerializerType(objectTypeRef, true, out objectTypeDef);
+            TypeDefinition objectTd;
+            SerializerType serializerType = GeneratorHelper.GetSerializerType(objectTr, true, out objectTd);
+
             if (serializerType != SerializerType.Invalid)
             {
                 //Array.
                 if (serializerType == SerializerType.Array)
-                {
-                    TypeReference elementType = objectTypeRef.GetElementType();
-                    methodRefResult = CreateCollectionWriterMethodDefinition(objectTypeRef, elementType);
-                }
+                    methodRefResult = CreateArrayWriterMethodDefinition(objectTr);
                 //Enum.
                 else if (serializerType == SerializerType.Enum)
-                {
-                    methodRefResult = CreateEnumWriterMethodDefinition(objectTypeRef);
-                }
+                    methodRefResult = CreateEnumWriterMethodDefinition(objectTr);
+                //Dictionary.
+                else if (serializerType == SerializerType.Dictionary)
+                    methodRefResult = CreateDictionaryWriterMethodReference(objectTr);
                 //List.
                 else if (serializerType == SerializerType.List)
-                {
-                    GenericInstanceType genericInstanceType = (GenericInstanceType)objectTypeRef;
-                    TypeReference elementType = genericInstanceType.GenericArguments[0];
-                    methodRefResult = CreateCollectionWriterMethodDefinition(objectTypeRef, elementType);
-                }
+                    methodRefResult = CreateListWriterMethodReference(objectTr);
                 //NetworkBehaviour.
                 else if (serializerType == SerializerType.NetworkBehaviour)
-                {
-                    methodRefResult = CreateNetworkBehaviourWriterMethodReference(objectTypeDef);
-                }
+                    methodRefResult = CreateNetworkBehaviourWriterMethodReference(objectTd);
+                //Nullable type.
+                else if (serializerType == SerializerType.Nullable)
+                    methodRefResult = CreateNullableWriterMethodReference(objectTr, objectTd);
                 //Class or struct.
                 else if (serializerType == SerializerType.ClassOrStruct)
-                {
-                    methodRefResult = CreateClassOrStructWriterMethodDefinition(objectTypeRef);
-                }
+                    methodRefResult = CreateClassOrStructWriterMethodDefinition(objectTr);
             }
 
-            //If was created.
-            if (methodRefResult != null)
-                    CodegenSession.WriterHelper.AddWriterMethod(objectTypeRef, methodRefResult, false, true);
+            //If was not created.
+            if (methodRefResult == null)
+                RemoveFromStaticWriters(objectTr);
 
             return methodRefResult;
         }
 
-
+        /// <summary>
+        /// Removes from static writers.
+        /// </summary>
+        private void RemoveFromStaticWriters(TypeReference tr)
+        {
+            CodegenSession.WriterHelper.RemoveWriterMethod(tr, false);
+        }
+        /// <summary>
+        /// Adds to static writers.
+        /// </summary>
+        private void AddToStaticWriters(TypeReference tr, MethodReference mr)
+        {
+            CodegenSession.WriterHelper.AddWriterMethod(tr, mr.CachedResolve(), false, true);
+        }
 
         /// <summary>
         /// Adds a write for a NetworkBehaviour class type to WriterMethods.
         /// </summary>
         /// <param name="classTypeRef"></param>
-        private MethodDefinition CreateNetworkBehaviourWriterMethodReference(TypeReference objectTypeRef)
+        private MethodReference CreateNetworkBehaviourWriterMethodReference(TypeReference objectTr)
         {
+            objectTr = CodegenSession.ImportReference(objectTr.Resolve());
             //All NetworkBehaviour types will simply WriteNetworkBehaviour/ReadNetworkBehaviour.
             //Create generated reader/writer class. This class holds all generated reader/writers.
-            CodegenSession.GeneralHelper.GetOrCreateClass(out _, GENERATED_TYPE_ATTRIBUTES, GENERATED_CLASS_NAME, null);
+            CodegenSession.GeneralHelper.GetOrCreateClass(out _, GENERATED_TYPE_ATTRIBUTES, GENERATED_WRITERS_CLASS_NAME, null);
 
-            MethodDefinition createdWriterMethodDef = CreateStaticWriterStubMethodDefinition(objectTypeRef);
-            ILProcessor processor = createdWriterMethodDef.Body.GetILProcessor();
+            MethodDefinition createdWriterMd = CreateStaticWriterStubMethodDefinition(objectTr);
+            AddToStaticWriters(objectTr, createdWriterMd);
+
+            ILProcessor processor = createdWriterMd.Body.GetILProcessor();
+
             MethodReference writeMethodRef = CodegenSession.WriterHelper.GetOrCreateFavoredWriteMethodReference(CodegenSession.WriterHelper.NetworkBehaviour_TypeRef, true);
             //Get parameters for method.
-            ParameterDefinition writerParameterDef = createdWriterMethodDef.Parameters[0];
-            ParameterDefinition classParameterDef = createdWriterMethodDef.Parameters[1];
+            ParameterDefinition writerParameterDef = createdWriterMd.Parameters[0];
+            ParameterDefinition classParameterDef = createdWriterMd.Parameters[1];
 
             //Load parameters as arguments.
             processor.Emit(OpCodes.Ldarg, writerParameterDef);
@@ -110,7 +114,7 @@ namespace FishNet.CodeGenerating.Helping
 
             processor.Emit(OpCodes.Ret);
 
-            return createdWriterMethodDef;
+            return CodegenSession.ImportReference(createdWriterMd);
         }
 
         /// <summary> 
@@ -124,49 +128,65 @@ namespace FishNet.CodeGenerating.Helping
             processor.Emit(OpCodes.Stloc, storeVariableDef);
         }
 
+
         /// <summary>
-        /// Returns common list references for list type of elementTypeRef.
+        /// Creates a writer for a class or struct of objectTypeRef.
         /// </summary>
-        /// <param name="elementTypeRef"></param>
+        /// <param name="objectTr"></param>
         /// <returns></returns>
-        private ListMethodReferences GetListMethodReferences(TypeReference elementTypeRef)
+        private MethodReference CreateNullableWriterMethodReference(TypeReference objectTr, TypeDefinition objectTd)
         {
-            ListMethodReferences result;
-            //If found return result.
-            if (_cachedListMethodRefs.TryGetValue(elementTypeRef, out result))
+            GenericInstanceType objectGit = objectTr as GenericInstanceType;
+            TypeReference valueTr = objectGit.GenericArguments[0];
+
+            //Get the writer for the value.
+            MethodReference valueWriterMr = CodegenSession.WriterHelper.GetOrCreateFavoredWriteMethodReference(valueTr, true);
+            if (valueWriterMr == null)
+                return null;
+
+
+            MethodDefinition tmpMd;
+            tmpMd = objectTd.GetMethod("get_Value");
+            MethodReference genericGetValueMr = tmpMd.MakeHostInstanceGeneric(objectGit);
+            tmpMd = objectTd.GetMethod("get_HasValue");
+            MethodReference genericHasValueMr = tmpMd.MakeHostInstanceGeneric(objectGit);
+
+
+            /* Stubs generate Method(Writer writer, T value). */
+            MethodDefinition createdWriterMd = CreateStaticWriterStubMethodDefinition(objectTr);
+            ILProcessor processor = createdWriterMd.Body.GetILProcessor();
+
+            //Value parameter.
+            ParameterDefinition valuePd = createdWriterMd.Parameters[1];
+
+            ParameterDefinition writerPd = createdWriterMd.Parameters[0];
+
+            //Have to write a new ret on null because nullables use hasValue for null checks.
+            Instruction afterNullRetInst = processor.Create(OpCodes.Nop);
+            processor.Emit(OpCodes.Ldarga, valuePd);
+            processor.Emit(OpCodes.Call, genericHasValueMr);
+            processor.Emit(OpCodes.Brtrue_S, afterNullRetInst);
+            CodegenSession.WriterHelper.CreateWriteBool(processor, writerPd, true);
+            processor.Emit(OpCodes.Ret);
+            processor.Append(afterNullRetInst);
+
+
+            //Code will only execute here and below if not null.
+            CodegenSession.WriterHelper.CreateWriteBool(processor, writerPd, false);
+
+            processor.Emit(OpCodes.Ldarg, writerPd);
+            processor.Emit(OpCodes.Ldarga, valuePd);
+            processor.Emit(OpCodes.Call, genericGetValueMr);
+            //If an auto pack method then insert default value.
+            if (CodegenSession.WriterHelper.IsAutoPackedType(valueTr))
             {
-                return result;
+                AutoPackType packType = CodegenSession.GeneralHelper.GetDefaultAutoPackType(valueTr);
+                processor.Emit(OpCodes.Ldc_I4, (int)packType);
             }
-            //Otherwise make a new entry.
-            else
-            {
-                Type elementMonoType = elementTypeRef.GetMonoType();
-                if (elementMonoType == null)
-                {
-                    CodegenSession.LogError($"Mono Type could not be found for {elementMonoType.FullName}.");
-                    return null;
-                }
-                Type constructedListType = typeof(List<>).MakeGenericType(elementMonoType);
+            processor.Emit(OpCodes.Call, valueWriterMr);
 
-                MethodReference add = null;
-                MethodReference item = null;
-                foreach (System.Reflection.MethodInfo methodInfo in constructedListType.GetMethods())
-                {
-                    if (methodInfo.Name == "get_Item")
-                        item = CodegenSession.Module.ImportReference(methodInfo);
-                }
-
-
-                if (item == null)
-                {
-                    CodegenSession.LogError($"Count or Item property could not be found for {elementMonoType.FullName}.");
-                    return null;
-                }
-
-                ListMethodReferences lmr = new ListMethodReferences(constructedListType, item, add);
-                _cachedListMethodRefs.Add(elementTypeRef, lmr);
-                return lmr;
-            }
+            processor.Emit(OpCodes.Ret);
+            return CodegenSession.ImportReference(createdWriterMd);
         }
 
 
@@ -174,48 +194,70 @@ namespace FishNet.CodeGenerating.Helping
         /// <summary>
         /// Creates a writer for a class or struct of objectTypeRef.
         /// </summary>
-        /// <param name="objectTypeRef"></param>
+        /// <param name="objectTr"></param>
         /// <returns></returns>
-        private MethodDefinition CreateClassOrStructWriterMethodDefinition(TypeReference objectTypeRef)
+        private MethodReference CreateClassOrStructWriterMethodDefinition(TypeReference objectTr)
         {
             /*Stubs generate Method(Writer writer, T value). */
-            MethodDefinition createdWriterMethodDef = CreateStaticWriterStubMethodDefinition(objectTypeRef);
-            ILProcessor processor = createdWriterMethodDef.Body.GetILProcessor();
+            MethodDefinition createdWriterMd = CreateStaticWriterStubMethodDefinition(objectTr);
+            AddToStaticWriters(objectTr, createdWriterMd);
+
+            ILProcessor processor = createdWriterMd.Body.GetILProcessor();
 
             //If not a value type then add a null check.
-            if (!objectTypeRef.Resolve().IsValueType)
+            if (!objectTr.CachedResolve().IsValueType)
             {
-                ParameterDefinition readerParameterDef = createdWriterMethodDef.Parameters[0];
-                CodegenSession.WriterHelper.CreateRetOnNull(processor, readerParameterDef, createdWriterMethodDef.Parameters[1], true);
+                ParameterDefinition writerPd = createdWriterMd.Parameters[0];
+                CodegenSession.WriterHelper.CreateRetOnNull(processor, writerPd, createdWriterMd.Parameters[1], true);
                 //Code will only execute here and below if not null.
-                CodegenSession.WriterHelper.CreateWriteBool(processor, readerParameterDef, false);
+                CodegenSession.WriterHelper.CreateWriteBool(processor, writerPd, false);
             }
 
             //Write all fields for the class or struct.
-            ParameterDefinition valueParameterDef = createdWriterMethodDef.Parameters[1];
-            if (!WriteFields(processor, valueParameterDef, objectTypeRef))
+            ParameterDefinition valueParameterDef = createdWriterMd.Parameters[1];
+            if (!WriteFieldsAndProperties(createdWriterMd, valueParameterDef, objectTr))
                 return null;
 
             processor.Emit(OpCodes.Ret);
-            return createdWriterMethodDef;
+            return CodegenSession.ImportReference(createdWriterMd);
         }
 
         /// <summary>
         /// Find all fields in type and write them
         /// </summary>
-        /// <param name="objectTypeRef"></param>
+        /// <param name="objectTr"></param>
         /// <param name="processor"></param>
         /// <returns>false if fail</returns>
-        private bool WriteFields(ILProcessor processor, ParameterDefinition valueParameterDef, TypeReference objectTypeRef)
+        private bool WriteFieldsAndProperties(MethodDefinition writerMd, ParameterDefinition valuePd, TypeReference objectTr)
         {
-            foreach (FieldDefinition fieldDef in objectTypeRef.FindAllPublicFields())
-            {
-                MethodReference writeMethodRef = CodegenSession.WriterHelper.GetOrCreateFavoredWriteMethodReference(fieldDef.FieldType, true);
-                //Not all fields will support writing, such as NonSerialized ones.
-                if (writeMethodRef == null)
-                    continue;
+            //This probably isn't needed but I'm too afraid to remove it.
+            if (objectTr.Module != CodegenSession.Module)
+                objectTr = CodegenSession.ImportReference(objectTr.CachedResolve());
 
-                CodegenSession.WriterHelper.CreateWrite(processor, valueParameterDef, fieldDef, writeMethodRef);
+            //Fields
+            foreach (FieldDefinition fieldDef in objectTr.FindAllPublicFields(true, true))//, WriterHelper.EXCLUDED_AUTO_SERIALIZER_TYPES))
+            {
+                if (GetWriteMethod(fieldDef.FieldType, out MethodReference writeMr))
+                    CodegenSession.WriterHelper.CreateWrite(writerMd, valuePd, fieldDef, writeMr);
+            }
+
+            //Properties.
+            foreach (PropertyDefinition propertyDef in objectTr.FindAllPublicProperties(
+                true, WriterHelper.EXCLUDED_AUTO_SERIALIZER_TYPES, WriterHelper.EXCLUDED_ASSEMBLY_PREFIXES))
+            {
+                if (GetWriteMethod(propertyDef.PropertyType, out MethodReference writerMr))
+                {
+                    MethodReference getMr = CodegenSession.Module.ImportReference(propertyDef.GetMethod);
+                    CodegenSession.WriterHelper.CreateWrite(writerMd, valuePd, getMr, writerMr);
+                }
+            }
+
+            //Gets or creates writer method and outputs it. Returns true if method is found or created.
+            bool GetWriteMethod(TypeReference tr, out MethodReference writeMr)
+            {
+                tr = CodegenSession.ImportReference(tr);
+                writeMr = CodegenSession.WriterHelper.GetOrCreateFavoredWriteMethodReference(tr, true);
+                return (writeMr != null);
             }
 
             return true;
@@ -225,22 +267,24 @@ namespace FishNet.CodeGenerating.Helping
         /// <summary>
         /// Creates a writer for an enum.
         /// </summary>
-        /// <param name="enumTypeRef"></param>
+        /// <param name="enumTr"></param>
         /// <returns></returns>
-        private MethodDefinition CreateEnumWriterMethodDefinition(TypeReference enumTypeRef)
+        private MethodReference CreateEnumWriterMethodDefinition(TypeReference enumTr)
         {
-            MethodDefinition createdWriterMethodDef = CreateStaticWriterStubMethodDefinition(enumTypeRef);
-            ILProcessor processor = createdWriterMethodDef.Body.GetILProcessor();
+            MethodDefinition createdWriterMd = CreateStaticWriterStubMethodDefinition(enumTr);
+            AddToStaticWriters(enumTr, createdWriterMd);
+
+            ILProcessor processor = createdWriterMd.Body.GetILProcessor();
 
             //Element type for enum. EG: byte int ect
-            TypeReference underlyingTypeRef = enumTypeRef.Resolve().GetEnumUnderlyingTypeReference();
+            TypeReference underlyingTypeRef = enumTr.CachedResolve().GetEnumUnderlyingTypeReference();
             //Method to write that type.
             MethodReference underlyingWriterMethodRef = CodegenSession.WriterHelper.GetOrCreateFavoredWriteMethodReference(underlyingTypeRef, true);
             if (underlyingWriterMethodRef == null)
                 return null;
 
-            ParameterDefinition writerParameterDef = createdWriterMethodDef.Parameters[0];
-            ParameterDefinition valueParameterDef = createdWriterMethodDef.Parameters[1];
+            ParameterDefinition writerParameterDef = createdWriterMd.Parameters[0];
+            ParameterDefinition valueParameterDef = createdWriterMd.Parameters[1];
             //Push writer and value into call.
             processor.Emit(OpCodes.Ldarg, writerParameterDef);
             processor.Emit(OpCodes.Ldarg, valueParameterDef);
@@ -251,45 +295,38 @@ namespace FishNet.CodeGenerating.Helping
             processor.Emit(OpCodes.Call, underlyingWriterMethodRef);
 
             processor.Emit(OpCodes.Ret);
-            return createdWriterMethodDef;
+            return CodegenSession.ImportReference(createdWriterMd);
         }
 
+
         /// <summary>
-        /// Creates a writer for a collection for elementTypeRef.
+        /// Creates a writer for an array.
         /// </summary>
-        private MethodDefinition CreateCollectionWriterMethodDefinition(TypeReference objectTypeRef, TypeReference elementTypeRef)
+        private MethodReference CreateArrayWriterMethodDefinition(TypeReference objectTr)
         {
-            MethodDefinition createdWriterMethodDef = CreateStaticWriterStubMethodDefinition(objectTypeRef);
             /* Try to get instanced first for collection element type, if it doesn't exist then try to
              * get/or make a one. */
+            TypeReference elementTypeRef = objectTr.GetElementType();
             MethodReference writeMethodRef = CodegenSession.WriterHelper.GetOrCreateFavoredWriteMethodReference(elementTypeRef, true);
             if (writeMethodRef == null)
                 return null;
 
-            ILProcessor processor = createdWriterMethodDef.Body.GetILProcessor();
+            MethodDefinition createdWriterMd = CreateStaticWriterStubMethodDefinition(objectTr);
+            AddToStaticWriters(objectTr, createdWriterMd);
 
-            ListMethodReferences lstMethodRefs = null;
-            //True if array, false if list.
-            bool isArray = createdWriterMethodDef.Parameters[1].ParameterType.IsArray;
-            //If not array get methodRefs needed to create a list writer.
-            if (!isArray)
-            {
-                lstMethodRefs = GetListMethodReferences(elementTypeRef);
-                if (lstMethodRefs == null)
-                    return null;
-            }
+            ILProcessor processor = createdWriterMd.Body.GetILProcessor();
 
             //Null instructions.
-            CodegenSession.WriterHelper.CreateRetOnNull(processor, createdWriterMethodDef.Parameters[0], createdWriterMethodDef.Parameters[1], false);
+            CodegenSession.WriterHelper.CreateRetOnNull(processor, createdWriterMd.Parameters[0], createdWriterMd.Parameters[1], false);
 
             //Write length. It only makes it this far if not null.
             //int length = arr[].Length.
-            VariableDefinition sizeVariableDef = CodegenSession.GeneralHelper.CreateVariable(createdWriterMethodDef, typeof(int));
-            CreateCollectionLength(processor, createdWriterMethodDef.Parameters[1], sizeVariableDef);
+            VariableDefinition sizeVariableDef = CodegenSession.GeneralHelper.CreateVariable(createdWriterMd, typeof(int));
+            CreateCollectionLength(processor, createdWriterMd.Parameters[1], sizeVariableDef);
             //writer.WritePackedWhole(length).
-            CodegenSession.WriterHelper.CreateWritePackedWhole(processor, createdWriterMethodDef.Parameters[0], sizeVariableDef);
+            CodegenSession.WriterHelper.CreateWritePackedWhole(processor, createdWriterMd.Parameters[0], sizeVariableDef);
 
-            VariableDefinition loopIndex = CodegenSession.GeneralHelper.CreateVariable(createdWriterMethodDef, typeof(int));
+            VariableDefinition loopIndex = CodegenSession.GeneralHelper.CreateVariable(createdWriterMd, typeof(int));
             Instruction loopComparer = processor.Create(OpCodes.Ldloc, loopIndex);
 
             //int i = 0
@@ -303,18 +340,10 @@ namespace FishNet.CodeGenerating.Helping
             processor.Emit(OpCodes.Ldarg_1);
             processor.Emit(OpCodes.Ldloc, loopIndex);
 
-            //Load array element.
-            if (isArray)
-            {
-                if (elementTypeRef.IsValueType)
-                    processor.Emit(OpCodes.Ldelem_Any, elementTypeRef);
-                else
-                    processor.Emit(OpCodes.Ldelem_Ref);
-            }
+            if (elementTypeRef.IsValueType)
+                processor.Emit(OpCodes.Ldelem_Any, elementTypeRef);
             else
-            {
-                processor.Emit(OpCodes.Callvirt, lstMethodRefs.Item_MethodRef);
-            }
+                processor.Emit(OpCodes.Ldelem_Ref);
             //If auto pack type then write default auto pack.
             if (CodegenSession.WriterHelper.IsAutoPackedType(elementTypeRef))
             {
@@ -322,7 +351,7 @@ namespace FishNet.CodeGenerating.Helping
                 processor.Emit(OpCodes.Ldc_I4, (int)packType);
             }
             //writer.Write
-            processor.Emit(OpCodes.Callvirt, writeMethodRef);
+            processor.Emit(OpCodes.Call, writeMethodRef);
 
             //i++
             processor.Emit(OpCodes.Ldloc, loopIndex);
@@ -335,7 +364,114 @@ namespace FishNet.CodeGenerating.Helping
             processor.Emit(OpCodes.Blt_S, contentStart);
 
             processor.Emit(OpCodes.Ret);
-            return createdWriterMethodDef;
+            return CodegenSession.ImportReference(createdWriterMd);
+        }
+
+
+        /// <summary>
+        /// Creates a writer for a dictionary collection.
+        /// </summary>
+        private MethodReference CreateDictionaryWriterMethodReference(TypeReference objectTr)
+        {
+            GenericInstanceType genericInstance = (GenericInstanceType)objectTr;
+            CodegenSession.ImportReference(genericInstance);
+            TypeReference keyTr = genericInstance.GenericArguments[0];
+            TypeReference valueTr = genericInstance.GenericArguments[1];
+
+            /* Try to get instanced first for collection element type, if it doesn't exist then try to
+             * get/or make a one. */
+            MethodReference keyWriteMr = CodegenSession.WriterHelper.GetOrCreateFavoredWriteMethodReference(keyTr, true);
+            MethodReference valueWriteMr = CodegenSession.WriterHelper.GetOrCreateFavoredWriteMethodReference(valueTr, true);
+            if (keyWriteMr == null || valueWriteMr == null)
+                return null;
+
+            MethodDefinition createdWriterMd = CreateStaticWriterStubMethodDefinition(objectTr);
+            AddToStaticWriters(objectTr, createdWriterMd);
+
+            ILProcessor processor = createdWriterMd.Body.GetILProcessor();
+            GenericInstanceMethod genericInstanceMethod = CodegenSession.WriterHelper.Writer_WriteDictionary_MethodRef.MakeGenericMethod(new TypeReference[] { keyTr, valueTr });
+
+            ParameterDefinition writerPd = createdWriterMd.Parameters[0];
+            ParameterDefinition valuePd = createdWriterMd.Parameters[1];
+            processor.Emit(OpCodes.Ldarg, writerPd);
+            processor.Emit(OpCodes.Ldarg, valuePd);
+            processor.Emit(OpCodes.Callvirt, genericInstanceMethod);
+            processor.Emit(OpCodes.Ret);
+
+            return CodegenSession.ImportReference(createdWriterMd);
+        }
+
+
+        /// <summary>
+        /// Creates a writer for a list.
+        /// </summary>
+        private MethodReference CreateListWriterMethodReference(TypeReference objectTr)
+        {
+            GenericInstanceType genericInstance = (GenericInstanceType)objectTr;
+            CodegenSession.ImportReference(genericInstance);
+            TypeReference elementTypeRef = genericInstance.GenericArguments[0];
+
+            /* Try to get instanced first for collection element type, if it doesn't exist then try to
+             * get/or make a one. */
+            MethodReference writeMethodRef = CodegenSession.WriterHelper.GetOrCreateFavoredWriteMethodReference(elementTypeRef, true);
+            if (writeMethodRef == null)
+                return null;
+
+            MethodDefinition createdWriterMd = CreateStaticWriterStubMethodDefinition(objectTr);
+            AddToStaticWriters(objectTr, createdWriterMd);
+
+            ILProcessor processor = createdWriterMd.Body.GetILProcessor();
+
+            //Find add method for list.
+            MethodReference lstGetItemMd = objectTr.CachedResolve().GetMethod("get_Item");
+            MethodReference lstGetItemMr = lstGetItemMd.MakeHostInstanceGeneric(genericInstance);
+
+            //Null instructions.
+            CodegenSession.WriterHelper.CreateRetOnNull(processor, createdWriterMd.Parameters[0], createdWriterMd.Parameters[1], false);
+
+            //Write length. It only makes it this far if not null.
+            //int length = List<T>.Count.
+            VariableDefinition sizeVariableDef = CodegenSession.GeneralHelper.CreateVariable(createdWriterMd, typeof(int));
+            CreateCollectionLength(processor, createdWriterMd.Parameters[1], sizeVariableDef);
+            //writer.WritePackedWhole(length).
+            CodegenSession.WriterHelper.CreateWritePackedWhole(processor, createdWriterMd.Parameters[0], sizeVariableDef);
+
+            VariableDefinition loopIndex = CodegenSession.GeneralHelper.CreateVariable(createdWriterMd, typeof(int));
+            Instruction loopComparer = processor.Create(OpCodes.Ldloc, loopIndex);
+
+            //int i = 0
+            processor.Emit(OpCodes.Ldc_I4_0);
+            processor.Emit(OpCodes.Stloc, loopIndex);
+            processor.Emit(OpCodes.Br_S, loopComparer);
+
+            //Loop content.
+            Instruction contentStart = processor.Create(OpCodes.Ldarg_0);
+            processor.Append(contentStart);
+            processor.Emit(OpCodes.Ldarg_1);
+            processor.Emit(OpCodes.Ldloc, loopIndex);
+
+            processor.Emit(OpCodes.Callvirt, lstGetItemMr);
+            //If auto pack type then write default auto pack.
+            if (CodegenSession.WriterHelper.IsAutoPackedType(elementTypeRef))
+            {
+                AutoPackType packType = CodegenSession.GeneralHelper.GetDefaultAutoPackType(elementTypeRef);
+                processor.Emit(OpCodes.Ldc_I4, (int)packType);
+            }
+            //writer.Write
+            processor.Emit(OpCodes.Call, writeMethodRef);
+
+            //i++
+            processor.Emit(OpCodes.Ldloc, loopIndex);
+            processor.Emit(OpCodes.Ldc_I4_1);
+            processor.Emit(OpCodes.Add);
+            processor.Emit(OpCodes.Stloc, loopIndex);
+            //if i < length jmp to content start.
+            processor.Append(loopComparer);  //if i < obj(size).
+            processor.Emit(OpCodes.Ldloc, sizeVariableDef);
+            processor.Emit(OpCodes.Blt_S, contentStart);
+
+            processor.Emit(OpCodes.Ret);
+            return CodegenSession.ImportReference(createdWriterMd);
         }
 
 
@@ -344,11 +480,11 @@ namespace FishNet.CodeGenerating.Helping
         /// </summary>
         /// <param name="objectTypeRef"></param>
         /// <returns></returns>
-        private MethodDefinition CreateStaticWriterStubMethodDefinition(TypeReference objectTypeRef)
+        private MethodDefinition CreateStaticWriterStubMethodDefinition(TypeReference objectTypeRef, string nameExtension = "")
         {
-            string methodName = $"{WRITE_PREFIX}{objectTypeRef.FullName}";
+            string methodName = $"{WRITE_PREFIX}{objectTypeRef.FullName}{nameExtension}";
             // create new writer for this type
-            TypeDefinition writerTypeDef = CodegenSession.GeneralHelper.GetOrCreateClass(out _, GENERATED_TYPE_ATTRIBUTES, GENERATED_CLASS_NAME, null);
+            TypeDefinition writerTypeDef = CodegenSession.GeneralHelper.GetOrCreateClass(out _, GENERATED_TYPE_ATTRIBUTES, GENERATED_WRITERS_CLASS_NAME, null);
 
             MethodDefinition writerMethodDef = writerTypeDef.AddMethod(methodName,
                     MethodAttributes.Public |

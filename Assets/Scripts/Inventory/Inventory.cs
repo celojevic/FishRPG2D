@@ -10,6 +10,7 @@ public class Inventory : NetworkBehaviour
     [Tooltip("Data object for this inventory.")]
     [SerializeField] private InventoryData _data = null;
 
+    [SyncObject]
     public readonly SyncList<NetItemValue> NetItems = new SyncList<NetItemValue>();
     /// <summary>
     /// Populated on client only.
@@ -23,14 +24,16 @@ public class Inventory : NetworkBehaviour
 
     #region Client Items Callback
 
-    public override void OnStartClient(bool isOwner)
+    public override void OnStartClient()
     {
-        if (!isOwner) return;
+        base.OnStartClient();
+        if (!IsOwner) return;
         NetItems.OnChange += Items_OnChange;
     }
 
-    public override void OnStopClient(bool isOwner)
+    public override void OnStopClient()
     {
+        base.OnStopClient();
         NetItems.OnChange -= Items_OnChange;
     }
 

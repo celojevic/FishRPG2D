@@ -16,9 +16,17 @@ namespace FishNet.Serializing.Helping
         /// <returns></returns>
         internal static PooledWriter WriteBroadcast<T>(PooledWriter writer, T message, Channel channel)
         {
-            writer.WriteByte((byte)PacketId.Broadcast);
-            writer.WriteUInt16(typeof(T).FullName.GetStableHash16()); //muchlater codegen this to pass in hash. use technique similar to rpcs to limit byte/shorts.
-            writer.Write<T>(message);
+            writer.WritePacketId(PacketId.Broadcast);
+            writer.WriteUInt16(typeof(T).FullName.GetStableHash16()); //muchlater codegen this to pass in hash. use technique similar to rpcs to limit byte/shorts.            
+            //Write data to a new writer.
+            PooledWriter dataWriter = WriterPool.GetWriter();
+            dataWriter.Write<T>(message);
+            //Write length of data.
+            writer.WriteLength(dataWriter.Length);
+            //Write data.
+            writer.WriteArraySegment(dataWriter.GetArraySegment());
+            dataWriter.Dispose();
+
             return writer;
         }
     }

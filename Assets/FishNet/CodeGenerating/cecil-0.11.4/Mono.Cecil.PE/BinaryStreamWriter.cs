@@ -8,15 +8,14 @@
 // Licensed under the MIT/X11 license.
 //
 
-using System;
 using System.IO;
 
-namespace Mono.Cecil.PE {
+namespace MonoFN.Cecil.PE {
 
 	class BinaryStreamWriter : BinaryWriter {
 
 		public int Position {
-			get { return (int) BaseStream.Position; }
+			get { return (int)BaseStream.Position; }
 			set { BaseStream.Position = value; }
 		}
 

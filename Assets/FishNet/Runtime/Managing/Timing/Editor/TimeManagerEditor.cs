@@ -10,23 +10,23 @@ namespace FishNet.Managing.Timing.Editing
     [CanEditMultipleObjects]
     public class TimeManagerEditor : Editor
     {
-        private SerializedProperty _automaticPhysics;
         private SerializedProperty _tickRate;
-
-        private SerializedProperty _correctTiming;
+        private SerializedProperty _allowTickDropping;
+        private SerializedProperty _maximumFrameTicks;
+        private SerializedProperty _pingInterval;
+        private SerializedProperty _timingInterval;
+        private SerializedProperty _physicsMode;
         private SerializedProperty _maximumBufferedInputs;
-        private SerializedProperty _targetBufferedInputs;
-        private SerializedProperty _aggressiveTiming;
 
         protected virtual void OnEnable()
         {
-            _automaticPhysics = serializedObject.FindProperty("_automaticPhysics");
             _tickRate = serializedObject.FindProperty("_tickRate");
-
-            _correctTiming = serializedObject.FindProperty("_correctTiming");
+            _allowTickDropping = serializedObject.FindProperty("_allowTickDropping");
+            _maximumFrameTicks = serializedObject.FindProperty("_maximumFrameTicks");
+            _pingInterval = serializedObject.FindProperty("_pingInterval");
+            _timingInterval = serializedObject.FindProperty("_timingInterval");
+            _physicsMode = serializedObject.FindProperty("_physicsMode");
             _maximumBufferedInputs = serializedObject.FindProperty("_maximumBufferedInputs");
-            _targetBufferedInputs = serializedObject.FindProperty("_targetBufferedInputs");
-            _aggressiveTiming = serializedObject.FindProperty("_aggressiveTiming");
         }
 
         public override void OnInspectorGUI()
@@ -37,19 +37,35 @@ namespace FishNet.Managing.Timing.Editing
             EditorGUILayout.ObjectField("Script:", MonoScript.FromMonoBehaviour((TimeManager)target), typeof(TimeManager), false);
             GUI.enabled = true;
 
-            EditorGUILayout.PropertyField(_automaticPhysics, new GUIContent("Automatic Physics", "True to let Unity run physics. False to let TimeManager run physics after each tick."));
-            EditorGUILayout.PropertyField(_tickRate, new GUIContent("Tick Rate", "How many times per second the server will simulate"));
-
-            EditorGUILayout.PropertyField(_correctTiming, new GUIContent("Correct Timing", "While true the server will ask clients to adjust simulation rate as needed."));
-            if (_correctTiming.boolValue == true)
+            //Timing.
+            EditorGUILayout.LabelField("Timing", EditorStyles.boldLabel);
+            EditorGUI.indentLevel++;
+            EditorGUILayout.PropertyField(_allowTickDropping);
+            if (_allowTickDropping.boolValue == true)
             {
                 EditorGUI.indentLevel++;
-                EditorGUILayout.PropertyField(_maximumBufferedInputs, new GUIContent("Maximum Buffered Inputs", "Maximum number of excessive input sent from client before entries are dropped. Client is expected to send roughly one input per server tick."));
-                EditorGUILayout.PropertyField(_targetBufferedInputs, new GUIContent("Target Buffered Inputs", "Number of inputs server prefers to have buffered from clients."));
-                //EditorGUILayout.PropertyField(_aggressiveTiming, new GUIContent("Aggressive Timing", "True to enable more accurate tick synchronization between client and server at the cost of bandwidth."));
+                EditorGUILayout.PropertyField(_maximumFrameTicks);
                 EditorGUI.indentLevel--;
             }
+            EditorGUILayout.PropertyField(_tickRate);
+            EditorGUILayout.PropertyField(_pingInterval);
+            EditorGUILayout.PropertyField(_timingInterval);            
+            EditorGUI.indentLevel--;
             EditorGUILayout.Space();
+
+            //Physics.
+            EditorGUILayout.LabelField("Physics", EditorStyles.boldLabel);
+            EditorGUI.indentLevel++;
+            EditorGUILayout.PropertyField(_physicsMode);
+            if (_physicsMode.intValue != (int)FishNet.Managing.Timing.PhysicsMode.TimeManager)
+                EditorGUILayout.HelpBox("If you are using physics interactions be sure to change the PhysicsMode to TimeManager and implement physics within the TimeManager tick events.", MessageType.None);
+            EditorGUI.indentLevel--;
+
+            ////Prediction.
+            //EditorGUILayout.LabelField("Prediction", EditorStyles.boldLabel);
+            //EditorGUI.indentLevel++;
+            //EditorGUILayout.PropertyField(_maximumBufferedInputs);
+            //EditorGUI.indentLevel--;
 
             serializedObject.ApplyModifiedProperties();
         }

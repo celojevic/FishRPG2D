@@ -1,212 +1,54 @@
-﻿using Mono.Cecil;
-using Mono.Cecil.Rocks;
+﻿using MonoFN.Cecil;
+using MonoFN.Cecil.Rocks;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
 namespace FishNet.CodeGenerating.Helping.Extension
 {
 
-    internal static class TypeReferenceExtensions
+    internal static class TypeReferenceExtensionsOld
     {
+
         /// <summary>
-        /// Resolves the default constructor for typeRef.
+        /// Gets a Resolve favoring cached results first.
         /// </summary>
-        /// <param name="typeRef"></param>
-        /// <returns></returns>
-        public static MethodDefinition ResolveDefaultPublicConstructor(this TypeReference typeRef)
+        internal static TypeDefinition CachedResolve(this TypeReference typeRef)
         {
-            foreach (MethodDefinition methodDef in typeRef.Resolve().Methods)
-            {
-                if (methodDef.IsConstructor && methodDef.Resolve().IsPublic && methodDef.Parameters.Count == 0)
-                    return methodDef;
-            }
-            return null;
-        }
-        /// <summary>
-        /// Resolves the constructor with parameterCount for typeRef.
-        /// </summary>
-        /// <param name="typeRef"></param>
-        /// <returns></returns>
-        public static MethodDefinition ResolveParameterCountPublicConstructor(this TypeReference typeRef, int parameterCount)
-        {
-            foreach (MethodDefinition methodDef in typeRef.Resolve().Methods)
-            {
-                if (methodDef.IsConstructor && methodDef.Resolve().IsPublic && methodDef.Parameters.Count == parameterCount)
-                    return methodDef;
-            }
-            return null;
+            return CodegenSession.GeneralHelper.GetTypeReferenceResolve(typeRef);
         }
 
         /// <summary>
-        /// Resolves the default constructor for typeRef.
+        /// Returns if typeRef is a class or struct.
         /// </summary>
-        /// <param name="typeRef"></param>
-        /// <returns></returns>
-        public static MethodDefinition ResolveFirstPublicConstructor(this TypeReference typeRef)
+        internal static bool IsClassOrStruct(this TypeReference typeRef)
         {
-            foreach (MethodDefinition methodDef in typeRef.Resolve().Methods)
-            {
-                if (methodDef.IsConstructor && methodDef.Resolve().IsPublic)
-                    return methodDef;
-            }
-            return null;
+            TypeDefinition typeDef = typeRef.CachedResolve();
+            return (!typeDef.IsPrimitive && (typeDef.IsClass || typeDef.IsValueType));
         }
 
         /// <summary>
-        /// Gets mono Type from typeRef.
+        /// Returns all properties on typeRef and all base types which have a public get/set accessor.
         /// </summary>
         /// <param name="typeRef"></param>
         /// <returns></returns>
-        private static Type GetMonoTypeInTypeRefAsm(this TypeReference typeRef)
+        public static IEnumerable<PropertyDefinition> FindAllPublicProperties(this TypeReference typeRef, bool excludeGenerics = true, System.Type[] excludedBaseTypes = null, string[] excludedAssemblyPrefixes = null)
         {
-            if (typeRef == null)
-            {
-                CodegenSession.LogError("TypeRef is null.");
-                return null;
-            }
-
-            Type result = null;
-            try
-            {
-                result = Type.GetType(typeRef.FullName + ", " + typeRef.Resolve().Module.Assembly.FullName);
-            }
-            catch { }
-            finally
-            {
-                if (result == null)
-                    CodegenSession.LogWarning($"Unable to get Type for {typeRef.FullName}. If you are importing or exporting asset bundles or addressables you may ignore this warning. Additional warnings of this type for assembly {typeRef.Resolve().Module.Assembly.Name.Name} will be ignored.", true);
-            }
-
-            return result;
-        }
-        /// <summary>
-        /// Gets mono Type from typeRef.
-        /// </summary>
-        /// <param name="typeRef"></param>
-        /// <returns></returns>
-        public static Type GetMonoType(this TypeReference typeRef)
-        {
-            if (typeRef == null)
-            {
-                CodegenSession.LogError("TypeRef is null.");
-                return null;
-            }
-
-            Type result = null;
-            try
-            {
-                result = Type.GetType(typeRef.GetReflectionName(), true);
-            }
-            catch { }
-            finally
-            {
-                if (result == null)
-                    result = GetMonoTypeInTypeRefAsm(typeRef);
-            }
-
-            return result;
+            return typeRef.CachedResolve().FindAllPublicProperties(excludeGenerics, excludedBaseTypes, excludedAssemblyPrefixes);
         }
 
-        private static string GetReflectionName(this TypeReference type)
-        {
-            if (type.IsGenericInstance)
-            {
-                var genericInstance = (GenericInstanceType)type;
-                return string.Format("{0}.{1}[{2}]", genericInstance.Namespace, type.Name, String.Join(",", genericInstance.GenericArguments.Select(p => p.GetReflectionName()).ToArray()));
-            }
-            return type.FullName;
-        }
 
         /// <summary>
         /// Gets all public fields in typeRef and base type.
         /// </summary>
         /// <param name="typeRef"></param>
         /// <returns></returns>
-        public static IEnumerable<FieldDefinition> FindAllPublicFields(this TypeReference typeRef)
+        public static IEnumerable<FieldDefinition> FindAllPublicFields(this TypeReference typeRef, bool ignoreStatic, bool ignoreNonSerialized, System.Type[] excludedBaseTypes = null, string[] excludedAssemblyPrefixes = null)
         {
-            return FindAllPublicFields(typeRef.Resolve());
+            return typeRef.Resolve().FindAllPublicFields(ignoreStatic, ignoreNonSerialized, excludedBaseTypes, excludedAssemblyPrefixes);
         }
 
-
-        /// <summary>
-        /// Finds public fields in type and base type
-        /// </summary>
-        /// <param name="variable"></param>
-        /// <returns></returns>
-        public static IEnumerable<FieldDefinition> FindAllPublicFields(this TypeDefinition typeDefinition)
-        {
-            while (typeDefinition != null)
-            {
-                foreach (FieldDefinition field in typeDefinition.Fields)
-                {
-                    if (field.IsStatic || field.IsPrivate)
-                        continue;
-
-                    if (field.IsNotSerialized)
-                        continue;
-
-                    yield return field;
-                }
-
-                try
-                {
-                    typeDefinition = typeDefinition.BaseType?.Resolve();
-                }
-                catch
-                {
-                    break;
-                }
-            }
-        }
-
-
-        /// <summary>
-        /// Returns a method within the base type of typeRef.
-        /// </summary>
-        /// <param name="typeRef"></param>
-        /// <param name="methodName"></param>
-        /// <returns></returns>
-        public static MethodReference GetMethodInBaseType(this TypeReference typeRef, string methodName)
-        {
-            TypeDefinition typedef = typeRef.Resolve();
-            TypeReference typeRefCopy = typeRef;
-            while (typedef != null)
-            {
-                foreach (MethodDefinition md in typedef.Methods)
-                {
-                    if (md.Name == methodName)
-                    {
-                        return md;
-
-                        //MethodReference method = md;
-                        //if (typeRefCopy.IsGenericInstance)
-                        //{
-                        //    var baseTypeInstance = (GenericInstanceType)typeRef;
-                        //    method = method.MakeHostInstanceGeneric(baseTypeInstance);
-                        //}
-
-                        //return method;
-                    }
-                }
-
-                try
-                {
-                    TypeReference parent = typedef.BaseType;
-                    typeRefCopy = parent;
-                    typedef = parent?.Resolve();
-                }
-                catch (AssemblyResolutionException)
-                {
-                    // this can happen for plugins.
-                    break;
-                }
-            }
-
-            return null;
-        }
-
+    
         /// <summary>
         /// Returns if a typeRef is type.
         /// </summary>
@@ -250,13 +92,13 @@ namespace FishNet.CodeGenerating.Helping.Extension
 
                 if (typeRef.Scope.Name == "mscorlib")
                 {
-                    TypeDefinition resolved = typeRef.Resolve();
+                    TypeDefinition resolved = typeRef.CachedResolve();
                     return resolved != null;
                 }
 
                 try
                 {
-                    typeRef = typeRef.Resolve().BaseType;
+                    typeRef = typeRef.CachedResolve().BaseType;
                 }
                 catch
                 {

@@ -1,4 +1,4 @@
-﻿using Mono.Cecil;
+﻿using MonoFN.Cecil;
 using System.Linq;
 
 namespace FishNet.CodeGenerating.Helping.Extension
@@ -36,6 +36,17 @@ namespace FishNet.CodeGenerating.Helping.Extension
         internal static bool HasCustomAttribute<TAttribute>(this ICustomAttributeProvider attributeProvider)
         {
             return attributeProvider.CustomAttributes.Any(attr => attr.AttributeType.Is<TAttribute>());
+        }
+
+        /// <summary>
+        /// Returns if ca is of type target.
+        /// </summary>
+        /// <param name="ca"></param>
+        /// <param name="targetFullName"></param>
+        /// <returns></returns>
+        internal static bool Is(this CustomAttribute ca, string targetFullName)
+        {
+            return ca.AttributeType.FullName == targetFullName;
         }
     }
 

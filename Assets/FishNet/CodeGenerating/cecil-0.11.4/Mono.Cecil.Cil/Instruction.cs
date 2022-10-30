@@ -11,7 +11,7 @@
 using System;
 using System.Text;
 
-namespace Mono.Cecil.Cil {
+namespace MonoFN.Cecil.Cil {
 
 	public sealed class Instruction {
 
@@ -65,7 +65,7 @@ namespace Mono.Cecil.Cil {
 
 			switch (opcode.OperandType) {
 			case OperandType.InlineSwitch:
-				return size + (1 + ((Instruction []) operand).Length) * 4;
+				return size + (1 + ((Instruction [])operand).Length) * 4;
 			case OperandType.InlineI8:
 			case OperandType.InlineR:
 				return size + 8;
@@ -109,10 +109,10 @@ namespace Mono.Cecil.Cil {
 			switch (opcode.OperandType) {
 			case OperandType.ShortInlineBrTarget:
 			case OperandType.InlineBrTarget:
-				AppendLabel (instruction, (Instruction) operand);
+				AppendLabel (instruction, (Instruction)operand);
 				break;
 			case OperandType.InlineSwitch:
-				var labels = (Instruction []) operand;
+				var labels = (Instruction [])operand;
 				for (int i = 0; i < labels.Length; i++) {
 					if (i > 0)
 						instruction.Append (',');
